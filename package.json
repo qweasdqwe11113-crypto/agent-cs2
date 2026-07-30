@@ -1,0 +1,12 @@
+{
+  "name": "cs2-demo-analysis-agent",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "typecheck": "pnpm --recursive run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

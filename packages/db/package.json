@@ -1,0 +1,8 @@
+{
+  "name": "@cs2-demo/db",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
