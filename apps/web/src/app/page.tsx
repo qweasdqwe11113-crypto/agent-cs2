@@ -135,6 +135,7 @@ export default function HomePage() {
   const [question, setQuestion] = useState("");
   const [chatAnswer, setChatAnswer] = useState<string | null>(null);
   const [isAsking, setIsAsking] = useState(false);
+  const [pendingCoachQuestion, setPendingCoachQuestion] = useState<string | null>(null);
 
   useEffect(() => {
     const savedJobId = window.localStorage.getItem("latest-demo-analysis-job");
@@ -174,6 +175,13 @@ export default function HomePage() {
     return () => window.clearInterval(id);
   }, [deepTask]);
 
+  useEffect(() => {
+    if (deepTask?.state !== "completed" || pendingCoachQuestion === null) return;
+    const pendingQuestion = pendingCoachQuestion;
+    setPendingCoachQuestion(null);
+    void requestCoach(pendingQuestion, deepTask.id);
+  }, [deepTask, pendingCoachQuestion]);
+
   async function startDeepAnalysis() {
     if (!jobId || !selectedRound || !selectedPlayer) return;
     const response = await fetch("/api/deep-analysis", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseAnalysisJobId: jobId, roundNumber: selectedRound.number, steamId64: selectedPlayer.steamId64 }) });
@@ -181,10 +189,31 @@ export default function HomePage() {
     if (!response.ok || !payload.jobId) { setStatus(payload.error ?? "无法创建深度分析任务。"); return; }
     setDeepTask({ id: payload.jobId, state: "waiting", progress: 0 });
   }
-  async function askCoach(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!jobId || !question.trim()) return;
+  async function requestCoach(message: string, deepAnalysisJobId = deepTask?.id) {
+    if (!jobId) return;
     setIsAsking(true); setChatAnswer(null);
-    try { const response = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: question, baseAnalysisJobId: jobId, deepAnalysisJobId: deepTask?.id }) }); const payload = await response.json() as { answer?: string; error?: string }; if (!response.ok || !payload.answer) throw new Error(payload.error ?? "教练暂时无法回答。"); setChatAnswer(payload.answer); } catch (error) { setChatAnswer(error instanceof Error ? error.message : "教练暂时无法回答。"); } finally { setIsAsking(false); }
+    try {
+      const response = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message, baseAnalysisJobId: jobId, deepAnalysisJobId }) });
+      const responseText = await response.text();
+      let payload: { answer?: string; error?: string; action?: string; deepAnalysisJobId?: string; roundNumber?: number; player?: { name: string; steamId64: string }; reason?: string };
+      try { payload = JSON.parse(responseText) as typeof payload; } catch { throw new Error(`聊天服务返回了非 JSON 内容（HTTP ${response.status}）：${responseText.slice(0, 300) || "响应为空"}`); }
+      if (payload.action === "deep_analysis_started" && payload.deepAnalysisJobId && payload.player && payload.roundNumber) {
+        setSelectedRoundNumber(payload.roundNumber);
+        setSelectedPlayerId(payload.player.steamId64);
+        setDeepTask({ id: payload.deepAnalysisJobId, state: "waiting", progress: 0 });
+        setPendingCoachQuestion(message);
+        setChatAnswer(`AI 正在分析 ${payload.player.name} 的第 ${payload.roundNumber} 回合（${payload.reason ?? "补充交火证据"}）。完成后会自动继续回答。`);
+        return;
+      }
+      if (!response.ok || !payload.answer) throw new Error(payload.error ?? "教练暂时无法回答。");
+      setChatAnswer(payload.answer);
+    } catch (error) { setChatAnswer(error instanceof Error ? error.message : "教练暂时无法回答。"); } finally { setIsAsking(false); }
+  }
+
+  async function askCoach(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!jobId || !question.trim()) return;
+    await requestCoach(question);
   }
 
   const parsedDemo = task?.state === "completed" ? task.result?.parsedDemo : undefined;
