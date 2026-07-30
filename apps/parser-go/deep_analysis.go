@@ -17,6 +17,7 @@ type playerRoundAnalysis struct {
 	SteamID64     string        `json:"steamId64"`
 	InitialState  *initialState `json:"initialState"`
 	Samples       []stateSample `json:"samples"`
+	OpponentSamples []opponentSample `json:"opponentSamples"`
 	Events        []deepEvent   `json:"events"`
 	Summary       deepSummary   `json:"summary"`
 }
@@ -41,6 +42,18 @@ type stateSample struct {
 	Health int     `json:"health"`
 	Armor  int     `json:"armor"`
 	Weapon string  `json:"weapon"`
+}
+
+// opponentSample is collected only for the requested player-round. It enables
+// later aim-ray checks without retaining every player's full-match tick data.
+type opponentSample struct {
+	Frame     int     `json:"frame"`
+	SteamID64 string  `json:"steamId64"`
+	Name      string  `json:"name"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Z         float64 `json:"z"`
+	Health    int     `json:"health"`
 }
 
 type deepEvent struct {
@@ -69,7 +82,7 @@ func analyzePlayerRound(demoPath string, wantedRound int, steamID string) (resul
 	defer file.Close()
 	parser := demoinfocs.NewParser(file)
 	defer parser.Close()
-	result = playerRoundAnalysis{SchemaVersion: "v1", RoundNumber: wantedRound, SteamID64: steamID, Samples: []stateSample{}, Events: []deepEvent{}}
+	result = playerRoundAnalysis{SchemaVersion: "v2", RoundNumber: wantedRound, SteamID64: steamID, Samples: []stateSample{}, OpponentSamples: []opponentSample{}, Events: []deepEvent{}}
 	round := 0
 	active := false
 	var previous *stateSample
@@ -107,6 +120,13 @@ func analyzePlayerRound(demoPath string, wantedRound int, steamID string) (resul
 		}
 		result.Samples = append(result.Samples, sample)
 		previous = &result.Samples[len(result.Samples)-1]
+		for _, opponent := range parser.GameState().Participants().All() {
+			if opponent == nil || opponent.Team == player.Team || !opponent.IsAlive() || opponent.IsUnknown {
+				continue
+			}
+			opponentPosition := opponent.Position()
+			result.OpponentSamples = append(result.OpponentSamples, opponentSample{Frame: parser.CurrentFrame(), SteamID64: fmt.Sprint(opponent.SteamID64), Name: opponent.Name, X: opponentPosition.X, Y: opponentPosition.Y, Z: opponentPosition.Z, Health: opponent.Health()})
+		}
 	})
 	parser.RegisterEventHandler(func(event events.WeaponFire) {
 		if !active || !isTarget(event.Shooter, steamID) {

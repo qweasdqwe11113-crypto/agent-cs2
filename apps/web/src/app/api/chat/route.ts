@@ -27,6 +27,7 @@ type DeepAnalysis = {
   steamId64?: string;
   initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string };
   samples?: Array<{ frame: number; x: number; y: number; z: number; yaw: number; pitch: number; speed: number; health: number; armor: number; weapon: string }>;
+  opponentSamples?: Array<{ frame: number; steamId64: string; name: string; x: number; y: number; z: number; health: number }>;
   events?: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }>;
 };
 
@@ -53,6 +54,18 @@ function viewDirection(yaw: number, pitch: number) {
   const yawRadians = yaw * Math.PI / 180;
   const pitchRadians = pitch * Math.PI / 180;
   return { x: Math.cos(pitchRadians) * Math.cos(yawRadians), y: Math.cos(pitchRadians) * Math.sin(yawRadians), z: -Math.sin(pitchRadians) };
+}
+
+function aimRayCandidates(sample: NonNullable<DeepAnalysis["samples"]>[number], opponents: NonNullable<DeepAnalysis["opponentSamples"]>) {
+  const direction = viewDirection(sample.yaw, sample.pitch);
+  const origin = { x: sample.x, y: sample.y, z: sample.z + 64 };
+  return opponents.map((opponent) => {
+    const target = { x: opponent.x, y: opponent.y, z: opponent.z + 48 };
+    const offset = { x: target.x - origin.x, y: target.y - origin.y, z: target.z - origin.z };
+    const forwardDistance = offset.x * direction.x + offset.y * direction.y + offset.z * direction.z;
+    const perpendicularDistance = Math.sqrt(Math.max(0, offset.x ** 2 + offset.y ** 2 + offset.z ** 2 - forwardDistance ** 2));
+    return { name: opponent.name, steamId64: opponent.steamId64, health: opponent.health, forwardDistance, perpendicularDistance, intersectsPlayerCapsuleApproximation: forwardDistance > 0 && perpendicularDistance <= 22 };
+  }).sort((a, b) => a.perpendicularDistance - b.perpendicularDistance);
 }
 
 function parseResponsesResult(responseText: string): ResponsesResult | undefined {
@@ -94,7 +107,7 @@ export async function POST(request: Request) {
         { role: "system", content: "你是 CS2 赛后复盘教练。只能依据提供的比赛证据回答，不要猜测。每条结论必须指出回合、玩家、帧或事件。若问题需要某位玩家某回合的移动、开火、伤害、交火或逐帧证据，而证据中没有该回合的 selectedPlayerRoundAnalysis，必须调用 analyze_player_round；仅当用户的问题可由当前证据回答时才直接回答。" },
         { role: "system", content: `比赛证据：${evidence}` },
         { role: "system", content: "工具规则：问血量、护甲、速度、手持武器、开火前移动状态或某段移动时，若已有 selectedPlayerRoundAnalysis，调用对应的 get_player_* 工具；若没有，先调用 analyze_player_round。问武器基础伤害、穿甲、射速、弹匣或价格时调用 get_weapon_profile。" },
-        { role: "system", content: "准星规则：评估预瞄或准星摆放时，调用 get_player_aim_at_frame 与 get_player_position_at_frame。只能把 Yaw/Pitch 解释为视角朝向；未接入地图碰撞体、雷达标定和敌人骨骼射线检测时，禁止声称准星精确落在敌人头部或某个具体点位。" },
+        { role: "system", content: "准星规则：评估预瞄或准星摆放时，调用 get_player_aim_at_frame、get_player_position_at_frame 或 get_aim_targeting_at_frame。视线工具可用敌方身体胶囊近似判断准星附近目标；在地图碰撞体与雷达标定完成前，禁止断言两者之间无墙体遮挡，或准星精确落在头部、墙角或具体点位。" },
         { role: "user", content: body.message },
       ],
       tools: [{
@@ -141,6 +154,10 @@ export async function POST(request: Request) {
         type: "function", name: "get_player_aim_at_frame",
         description: "查询当前已完成深度分析中，目标玩家在指定帧附近的视角 Yaw/Pitch、世界坐标、移动状态和附近交火事件，用于预瞄与准星摆放复盘。它只反映准星朝向，不能在没有地图碰撞体和敌方骨骼数据时断言准星精确落点。",
         parameters: { type: "object", properties: { frame: { type: "integer", description: "要查询的 Demo 帧号" } }, required: ["frame"], additionalProperties: false },
+      }, {
+        type: "function", name: "get_aim_targeting_at_frame",
+        description: "对当前已完成深度分析的指定帧执行视线几何检查：将玩家视角射线与同帧敌方玩家胶囊近似相交，列出准星附近敌人。它不包含地图墙体碰撞；必须把无遮挡结论表述为待地图碰撞数据验证。",
+        parameters: { type: "object", properties: { frame: { type: "integer", description: "要检查的 Demo 帧号" } }, required: ["frame"], additionalProperties: false },
       }, {
         type: "function", name: "get_map_info",
         description: "查询当前比赛地图名称、tickrate、总帧数、回合数和玩家数。地图世界坐标尚未标定到雷达图/点位名时，必须说明坐标仅供相对位置判断。",
@@ -216,14 +233,18 @@ export async function POST(request: Request) {
       const weapon = typeof args.weapon === "string" ? args.weapon : "";
       const profile = WEAPON_PROFILES[weaponKey(weapon)];
       toolResult = profile ? { available: true, source: "内置 CS2 常用武器资料库；静态数值会随版本平衡调整", profile } : { available: false, weapon, reason: "当前内置资料库未收录该武器。" };
-    } else if (toolCall.name === "get_player_position_at_frame" || toolCall.name === "get_player_aim_at_frame") {
+    } else if (toolCall.name === "get_player_position_at_frame" || toolCall.name === "get_player_aim_at_frame" || toolCall.name === "get_aim_targeting_at_frame") {
       const frame = typeof args.frame === "number" ? args.frame : NaN;
       const samples = deepAnalysis?.samples ?? [];
       if (!Number.isInteger(frame) || samples.length === 0) toolResult = { available: false, reason: "当前没有可用的单回合深度分析；请先分析目标玩家与回合。" };
       else {
         const sample = nearestSample(samples, frame);
         const common = { available: true, requestedFrame: frame, sampledFrame: sample.frame, frameOffset: sample.frame - frame, position: { x: sample.x, y: sample.y, z: sample.z }, speed: sample.speed, health: sample.health, armor: sample.armor, weapon: sample.weapon, nearbyEvents: (deepAnalysis?.events ?? []).filter((event) => Math.abs(event.frame - sample.frame) <= 32) };
-        toolResult = toolCall.name === "get_player_aim_at_frame" ? { ...common, viewAngles: { yaw: sample.yaw, pitch: sample.pitch }, viewDirection: viewDirection(sample.yaw, sample.pitch), limitation: "这是视角/准星朝向推断；尚无地图碰撞体、雷达标定与敌人骨骼射线检测，不能确定准星精确落点。" } : common;
+        if (toolCall.name === "get_player_aim_at_frame") toolResult = { ...common, viewAngles: { yaw: sample.yaw, pitch: sample.pitch }, viewDirection: viewDirection(sample.yaw, sample.pitch), limitation: "这是视角/准星朝向推断；尚无地图碰撞体、雷达标定与敌人骨骼射线检测，不能确定准星精确落点。" };
+        else if (toolCall.name === "get_aim_targeting_at_frame") {
+          const opponents = (deepAnalysis?.opponentSamples ?? []).filter((opponent) => opponent.frame === sample.frame);
+          toolResult = { ...common, viewAngles: { yaw: sample.yaw, pitch: sample.pitch }, candidates: aimRayCandidates(sample, opponents).slice(0, 5), limitation: "候选结果使用敌人身体胶囊近似；目前未读取地图 VPK 中的碰撞体，不能确认两者之间没有墙体或道具遮挡。" };
+        } else toolResult = common;
       }
     } else if (toolCall.name === "get_map_info") {
       const match = baseResult?.parsedDemo;
