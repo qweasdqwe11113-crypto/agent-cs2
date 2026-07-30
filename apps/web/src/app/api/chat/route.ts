@@ -183,7 +183,9 @@ export async function POST(request: Request) {
     if (!demoPath) return NextResponse.json({ error: "当前比赛找不到可供深度分析的 Demo 文件。" }, { status: 409 });
     const jobId = `deep-v2-${body.baseAnalysisJobId}-${round.number}-${player.steamId64}`;
     const existing = await playerRoundAnalysisQueue.getJob(jobId);
-    const job = existing ?? await playerRoundAnalysisQueue.add("analyze-player-round", { baseAnalysisJobId: body.baseAnalysisJobId, demoPath, roundNumber: round.number, steamId64: player.steamId64 }, { jobId });
+    const mapName = baseResult?.parsedDemo?.mapName;
+    if (!mapName) return NextResponse.json({ error: "地图信息不可用。" }, { status: 409 });
+    const job = existing ?? await playerRoundAnalysisQueue.add("analyze-player-round", { baseAnalysisJobId: body.baseAnalysisJobId, demoPath, mapName, roundNumber: round.number, steamId64: player.steamId64 }, { jobId });
     return NextResponse.json({ action: "deep_analysis_started", deepAnalysisJobId: job.id, roundNumber: round.number, player: { name: player.name, steamId64: player.steamId64 }, reason: args.reason ?? "需要补充逐帧证据" }, { status: 202 });
   }
 

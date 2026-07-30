@@ -18,6 +18,7 @@ export interface DemoAnalysisJobPayload {
 export interface PlayerRoundAnalysisJobPayload {
   baseAnalysisJobId: string;
   demoPath: string;
+  mapName: string;
   roundNumber: number;
   steamId64: string;
 }

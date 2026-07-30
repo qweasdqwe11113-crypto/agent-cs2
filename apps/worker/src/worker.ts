@@ -5,6 +5,7 @@ import { config } from "./config.js";
 import { importDemo } from "./demo-import.js";
 import { DEMO_ANALYSIS_QUEUE, PLAYER_ROUND_ANALYSIS_QUEUE, type DemoAnalysisJob, type PlayerRoundAnalysisJob } from "./jobs.js";
 import { analyzePlayerRound, parseDemo } from "./parser-client.js";
+import { analyzeShotVisibility } from "./map-collision.js";
 
 export function createDemoAnalysisWorker() {
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
@@ -78,9 +79,11 @@ export function createPlayerRoundAnalysisWorker() {
   const worker = new Worker<PlayerRoundAnalysisJob>(PLAYER_ROUND_ANALYSIS_QUEUE, async (job) => {
     await job.updateProgress(5);
     const analysis = await analyzePlayerRound(config.parserExecutable, job.data.demoPath, job.data.roundNumber, job.data.steamId64, config.parserTimeoutMs);
+    await job.updateProgress(75);
+    const visibilityChecks = await analyzeShotVisibility(job.data.mapName, analysis.samples, analysis.opponentSamples ?? [], analysis.events.filter((event) => event.type === "shot").map((event) => event.frame));
     await job.updateProgress(100);
     console.info("Player round analysis completed", { jobId: job.id, round: job.data.roundNumber, player: job.data.steamId64, events: analysis.events.length });
-    return { status: "completed", analysis, analyzedAt: new Date().toISOString() };
+    return { status: "completed", analysis: { ...analysis, visibilityChecks }, analyzedAt: new Date().toISOString() };
   }, { connection, concurrency: 1 });
   worker.on("ready", () => console.info("Player round analysis worker is ready and waiting for jobs"));
   worker.on("failed", (job, error) => console.error("Player round analysis failed", { jobId: job?.id, error }));

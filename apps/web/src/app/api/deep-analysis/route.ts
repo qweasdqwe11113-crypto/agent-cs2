@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 
 interface BaseAnalysisResult {
   importedDemo?: { demo?: { demoPath?: string } };
+  parsedDemo?: { mapName?: string };
 }
 
 export async function POST(request: Request) {
@@ -16,11 +17,13 @@ export async function POST(request: Request) {
   const baseJob = await demoAnalysisQueue.getJob(body.baseAnalysisJobId);
   if (baseJob === undefined || await baseJob.getState() !== "completed") return NextResponse.json({ error: "基础比赛报告尚未完成。" }, { status: 409 });
   const demoPath = (baseJob.returnvalue as BaseAnalysisResult | undefined)?.importedDemo?.demo?.demoPath;
+  const mapName = (baseJob.returnvalue as BaseAnalysisResult | undefined)?.parsedDemo?.mapName;
   if (!demoPath) return NextResponse.json({ error: "基础任务没有可用的 demo 文件。" }, { status: 409 });
   const roundNumber = body.roundNumber as number;
   const steamId64 = body.steamId64 as string;
   const jobId = `deep-v2-${body.baseAnalysisJobId}-${roundNumber}-${steamId64}`;
-  const job = await playerRoundAnalysisQueue.add("analyze-player-round", { baseAnalysisJobId: body.baseAnalysisJobId, demoPath, roundNumber, steamId64 }, { jobId });
+  if (!mapName) return NextResponse.json({ error: "地图信息不可用。" }, { status: 409 });
+  const job = await playerRoundAnalysisQueue.add("analyze-player-round", { baseAnalysisJobId: body.baseAnalysisJobId, demoPath, mapName, roundNumber, steamId64 }, { jobId });
   return NextResponse.json({ jobId: job.id }, { status: 202 });
 }
 
