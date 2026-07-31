@@ -68,7 +68,7 @@ interface DeepTaskResponse {
   state: string;
   progress: number | object;
   failedReason?: string;
-  result?: { analysis: { summary: { shotsFired: number; damageDealt: number; damageTaken: number; movingShots: number }; initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string }; samples: Array<{ frame: number; x: number; y: number; speed: number; health: number; armor: number; weapon: string }>; events: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }> } };
+  result?: { analysis: { summary: { shotsFired: number; damageDealt: number; damageTaken: number; movingShots: number }; initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string }; samples: Array<{ frame: number; x: number; y: number; z: number; yaw: number; pitch: number; speed: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string }>; events: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }> } };
 }
 
 function taskStateText(state: string): string {
@@ -122,6 +122,18 @@ function buildDuels(events: NonNullable<DeepTaskResponse["result"]>["analysis"][
     }
   }
   return duels;
+}
+
+function RadarTrajectory({ samples, events }: { samples: NonNullable<DeepTaskResponse["result"]>["analysis"]["samples"]; events: NonNullable<DeepTaskResponse["result"]>["analysis"]["events"] }) {
+  const points = samples.filter((sample): sample is typeof sample & { radar: { x: number; y: number } } => sample.radar !== undefined);
+  if (points.length < 2) return null;
+  const firstPoint = points[0]!;
+  const lastPoint = points.at(-1)!;
+  const stride = Math.max(1, Math.ceil(points.length / 500));
+  const path = points.filter((_, index) => index % stride === 0).map((sample) => `${sample.radar.x},${sample.radar.y}`).join(" ");
+  const eventPoints = events.filter((event) => ["shot", "damage_dealt", "damage_taken", "kill", "death"].includes(event.type)).map((event) => ({ event, sample: points.reduce((nearest, sample) => Math.abs(sample.frame - event.frame) < Math.abs(nearest.frame - event.frame) ? sample : nearest) }));
+  const callouts = [...new Set(points.map((sample) => sample.callout).filter((callout): callout is string => Boolean(callout)))];
+  return <section className="radar-trajectory"><div className="radar-heading"><div><h4>回合轨迹雷达</h4><p className="hint">绿色为移动轨迹；圆点为开火、伤害与击杀等关键事件。</p></div><span>{callouts.length ? callouts.join(" → ") : "未进入已标注点位"}</span></div><div className="radar-canvas"><img src="/maps/de_mirage/radar.png" alt="Mirage 雷达图" /><svg viewBox="0 0 1024 1024" aria-label="玩家轨迹"><polyline points={path} className="radar-path" />{eventPoints.map(({ event, sample }, index) => <circle key={`${event.frame}-${index}`} cx={sample.radar.x} cy={sample.radar.y} r={event.type === "kill" || event.type === "death" ? 13 : 8} className={`radar-event radar-event-${event.type}`}><title>帧 {event.frame} · {deepEventText(event)}</title></circle>)}<circle cx={firstPoint.radar.x} cy={firstPoint.radar.y} r="10" className="radar-start"><title>回合起点</title></circle><circle cx={lastPoint.radar.x} cy={lastPoint.radar.y} r="10" className="radar-end"><title>回合终点</title></circle></svg></div><div className="radar-legend"><span><i className="legend-start" />起点</span><span><i className="legend-path" />轨迹</span><span><i className="legend-event" />关键事件</span><span><i className="legend-end" />终点</span></div></section>;
 }
 
 export default function HomePage() {
@@ -393,7 +405,7 @@ export default function HomePage() {
                       {deepTask !== null ? <section className="deep-result"><h4>{taskStateText(deepTask.state)}</h4>{deepAnalysis ? <>
                         {deepAnalysis.initialState ? <><h4>回合概览</h4><div className="player-stats"><div><span>起始血甲</span><strong>{deepAnalysis.initialState.health} / {deepAnalysis.initialState.armor}</strong></div><div><span>现金</span><strong>${deepAnalysis.initialState.money}</strong></div><div><span>装备价值</span><strong>${deepAnalysis.initialState.equipmentValue}</strong></div><div><span>主武器</span><strong>{deepAnalysis.initialState.weapon}</strong></div></div></> : null}
                         <div className="player-stats"><div><span>开火</span><strong>{deepAnalysis.summary.shotsFired}</strong></div><div><span>移动开火</span><strong>{deepAnalysis.summary.movingShots}</strong></div><div><span>造成伤害</span><strong>{deepAnalysis.summary.damageDealt}</strong></div><div><span>承受伤害</span><strong>{deepAnalysis.summary.damageTaken}</strong></div></div>
-                        <h4>路线与状态</h4><p className="hint">已按需采集 {deepAnalysis.samples.length} 个状态点；地图轨迹渲染将在接入地图坐标标定后显示。</p>
+                        <h4>路线与状态</h4><p className="hint">已按需采集 {deepAnalysis.samples.length} 个状态点。</p><RadarTrajectory samples={deepAnalysis.samples} events={deepAnalysis.events} />
                         <h4>对枪卡片</h4>{duels.length > 0 ? <div className="duel-list">{duels.map((duel, index) => <article className="duel-card" key={`${duel.opponent}-${duel.startFrame}`}><strong>交火 {index + 1} · {duel.opponent}</strong><span>帧 {duel.startFrame} – {duel.endFrame} · {duel.outcome}</span><div><b>造成伤害 {duel.dealt}</b><b>承受伤害 {duel.taken}</b></div><ol className="event-list">{duel.shots.map((event, eventIndex) => <li key={`${event.frame}-${eventIndex}`}>{deepEventText(event)}{event.type === "shot" ? ` · ${event.stopStatus} · ${event.speed.toFixed(1)} u/s` : ""}</li>)}</ol></article>)}</div> : <p className="hint">本回合未找到可归类的对手交火。</p>}
                         <details><summary>展开全部原始事件证据</summary><ol className="event-list">{deepAnalysis.events.map((event, index) => <li key={`${event.frame}-${index}`}><strong>帧 {event.frame}</strong> · {deepEventText(event)} {event.type === "shot" ? `· ${event.stopStatus}（${event.confidence}）· 速度 ${event.speed.toFixed(1)}` : event.damage > 0 ? `· ${event.damage} 伤害` : ""}</li>)}</ol></details>
                         <h4>本回合训练建议</h4><ol className="event-list">{coachingInsights.map((insight) => <li key={insight}>{insight}</li>)}</ol>

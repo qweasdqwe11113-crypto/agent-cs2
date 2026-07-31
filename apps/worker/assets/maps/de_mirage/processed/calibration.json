@@ -1,0 +1,12 @@
+{
+  "mapName": "de_mirage",
+  "status": "calibrated",
+  "radarImage": "radar.png",
+  "imageWidth": 1024,
+  "imageHeight": 1024,
+  "originX": -3230,
+  "originY": 1713,
+  "scale": 5.0,
+  "flipY": true,
+  "notes": "Official de_mirage overview values from CS2 resource/overviews/de_mirage.txt."
+}

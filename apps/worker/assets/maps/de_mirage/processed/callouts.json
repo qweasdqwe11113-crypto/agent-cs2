@@ -1,0 +1,27 @@
+{
+  "mapName": "de_mirage",
+  "schemaVersion": "v1",
+  "regions": [
+    { "name": "T Spawn", "aliases": ["t-spawn"], "confidence": "official-anchor", "polygon": [[790,270],[980,270],[980,490],[790,490]] },
+    { "name": "CT Spawn", "aliases": ["ct-spawn"], "confidence": "official-anchor", "polygon": [[200,620],[390,620],[390,810],[200,810]] },
+    { "name": "Bombsite A", "aliases": ["a-site", "a"], "confidence": "official-anchor", "polygon": [[430,650],[670,650],[670,890],[430,890]] },
+    { "name": "Bombsite B", "aliases": ["b-site", "b"], "confidence": "official-anchor", "polygon": [[90,160],[390,160],[390,420],[90,420]] },
+    { "name": "B Apartments", "aliases": ["apps", "b-apps"], "confidence": "draft", "polygon": [[360,150],[700,150],[700,285],[430,285]] },
+    { "name": "Short", "aliases": ["catwalk", "b-short"], "confidence": "draft", "polygon": [[300,360],[480,360],[500,510],[360,550],[270,470]] },
+    { "name": "Top Mid", "aliases": ["top-mid"], "confidence": "draft", "polygon": [[620,360],[805,360],[805,560],[630,560]] },
+    { "name": "Mid", "aliases": ["middle"], "confidence": "draft", "polygon": [[470,430],[650,430],[650,610],[470,610]] },
+    { "name": "Connector", "aliases": ["con"], "confidence": "draft", "polygon": [[405,500],[505,500],[505,660],[410,660]] },
+    { "name": "Jungle", "aliases": ["jng"], "confidence": "draft", "polygon": [[330,560],[435,560],[435,690],[330,690]] },
+    { "name": "A Ramp", "aliases": ["ramp"], "confidence": "draft", "polygon": [[650,570],[810,570],[810,810],[590,810]] },
+    { "name": "Palace", "aliases": ["pal"], "confidence": "draft", "polygon": [[700,720],[900,720],[900,900],[650,900]] },
+    { "name": "Window", "aliases": ["mid-window"], "confidence": "draft", "polygon": [[400,330],[500,330],[500,440],[400,440]] },
+    { "name": "Underpass", "aliases": ["under"], "confidence": "draft", "polygon": [[470,260],[600,260],[600,420],[470,420]] },
+    { "name": "Market", "aliases": ["b-market"], "confidence": "draft", "polygon": [[130,430],[300,430],[300,600],[130,600]] },
+    { "name": "Van", "aliases": ["b-van"], "confidence": "draft", "polygon": [[90,330],[190,330],[190,460],[90,460]] },
+    { "name": "Ticket", "aliases": ["ticket-booth"], "confidence": "draft", "polygon": [[330,690],[440,690],[440,800],[330,800]] },
+    { "name": "Stairs", "aliases": ["a-stairs"], "confidence": "draft", "polygon": [[405,610],[510,610],[510,720],[405,720]] },
+    { "name": "Default", "aliases": ["a-default"], "confidence": "draft", "polygon": [[510,720],[605,720],[605,825],[510,825]] },
+    { "name": "Firebox", "aliases": ["fire-box"], "confidence": "draft", "polygon": [[605,665],[705,665],[705,770],[605,770]] },
+    { "name": "Bench", "aliases": ["b-bench"], "confidence": "draft", "polygon": [[255,305],[355,305],[355,410],[255,410]] }
+  ]
+}

@@ -6,6 +6,8 @@ import { importDemo } from "./demo-import.js";
 import { DEMO_ANALYSIS_QUEUE, PLAYER_ROUND_ANALYSIS_QUEUE, type DemoAnalysisJob, type PlayerRoundAnalysisJob } from "./jobs.js";
 import { analyzePlayerRound, parseDemo } from "./parser-client.js";
 import { analyzeShotVisibility } from "./map-collision.js";
+import { loadMirageRadarCalibration, worldToRadar } from "./map-calibration.js";
+import { getMirageCallout } from "./map-callouts.js";
 
 export function createDemoAnalysisWorker() {
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
@@ -79,6 +81,15 @@ export function createPlayerRoundAnalysisWorker() {
   const worker = new Worker<PlayerRoundAnalysisJob>(PLAYER_ROUND_ANALYSIS_QUEUE, async (job) => {
     await job.updateProgress(5);
     const analysis = await analyzePlayerRound(config.parserExecutable, job.data.demoPath, job.data.roundNumber, job.data.steamId64, config.parserTimeoutMs);
+    if (job.data.mapName === "de_mirage") {
+      const calibration = await loadMirageRadarCalibration();
+      analysis.samples = await Promise.all(analysis.samples.map(async (sample) => {
+        const radar = worldToRadar(calibration, sample);
+        if (!radar) return sample;
+        const callout = await getMirageCallout(radar);
+        return callout ? { ...sample, radar, callout } : { ...sample, radar };
+      }));
+    }
     await job.updateProgress(75);
     const visibilityChecks = await analyzeShotVisibility(job.data.mapName, analysis.samples, analysis.opponentSamples ?? [], analysis.events.filter((event) => event.type === "shot").map((event) => event.frame));
     await job.updateProgress(100);

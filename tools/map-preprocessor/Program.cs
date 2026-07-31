@@ -1,8 +1,15 @@
 using System.Collections;
+using ValveResourceFormat;
 using System.Numerics;
 using System.Text.Json;
 using Datamodel;
 using Datamodel.Codecs;
+
+if (args.FirstOrDefault() == "--inspect-vpk")
+{
+    foreach (var type in typeof(Resource).Assembly.GetTypes().Where(type => type.FullName?.Contains("Pak", StringComparison.OrdinalIgnoreCase) == true)) Console.WriteLine(type.FullName);
+    return;
+}
 
 var sourceDirectory = args.Length > 0 ? args[0] : Path.Combine("..", "..", "apps", "worker", "assets", "maps", "de_mirage", "source", "decompiled");
 var outputPath = args.Length > 1 ? args[1] : Path.Combine("..", "..", "apps", "worker", "assets", "maps", "de_mirage", "processed", "collision.json");

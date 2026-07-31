@@ -1,0 +1,27 @@
+{
+  "mapName": "de_mirage",
+  "schemaVersion": "v1",
+  "utilityPlays": [
+    { "id": "t-mid-window-smoke", "side": "T", "from": "Top Mid", "target": "Window", "utility": "Smoke", "purpose": "deny Window vision and enable Mid control", "timing": "early round" },
+    { "id": "t-mid-connector-smoke", "side": "T", "from": "Top Mid", "target": "Connector", "utility": "Smoke", "purpose": "split CT Mid rotation and protect Mid crossing", "timing": "early round" },
+    { "id": "t-a-ct-smoke", "side": "T", "from": "A Ramp", "target": "CT Spawn", "utility": "Smoke", "purpose": "cut Ticket/CT rotation during A execute", "timing": "site execute" },
+    { "id": "t-a-jungle-smoke", "side": "T", "from": "A Ramp", "target": "Jungle", "utility": "Smoke", "purpose": "isolate Jungle and Connector during A execute", "timing": "site execute" },
+    { "id": "t-a-stairs-smoke", "side": "T", "from": "A Ramp", "target": "Stairs", "utility": "Smoke", "purpose": "reduce A Stairs crossfire", "timing": "site execute" },
+    { "id": "t-b-market-smoke", "side": "T", "from": "B Apartments", "target": "Market", "utility": "Smoke", "purpose": "deny Market retake and defender vision", "timing": "site execute" },
+    { "id": "t-b-short-smoke", "side": "T", "from": "B Apartments", "target": "Short", "utility": "Smoke", "purpose": "cut Short support during B execute", "timing": "site execute" },
+    { "id": "ct-mid-top-flash", "side": "CT", "from": "Window", "target": "Top Mid", "utility": "Flash", "purpose": "contest early Mid control with teammate swing", "timing": "early round" }
+  ],
+  "defaultSetups": [
+    { "id": "t-1-3-1", "side": "T", "name": "1-3-1 default", "positions": ["A Ramp", "Top Mid", "Mid", "B Apartments"], "goals": ["obtain Mid information", "preserve utility", "avoid isolated first death", "keep both sites executable"] },
+    { "id": "t-a-split", "side": "T", "name": "A split", "positions": ["A Ramp", "Palace", "Connector", "Jungle"], "goals": ["synchronize Ramp and Palace pressure", "smoke CT/Jungle/Stairs", "trade the first entry"] },
+    { "id": "t-b-execute", "side": "T", "name": "B execute", "positions": ["B Apartments", "Short", "Market"], "goals": ["smoke Market and Short", "clear Van/Bench", "plant for apartments or short"] },
+    { "id": "ct-2-1-2", "side": "CT", "name": "2-1-2 default", "positions": ["Bombsite A", "Ticket", "Window", "Bombsite B", "Market"], "goals": ["keep Mid information", "anchor both sites", "rotate only on confirmed pressure"] }
+  ],
+  "holdPrinciples": [
+    { "location": "Window", "side": "CT", "principles": ["avoid repeating the same angle after contact", "use smoke/flash before re-peek", "call Mid player count before rotating"] },
+    { "location": "A Ramp", "side": "T", "principles": ["pair Ramp and Palace pressure", "clear close corner before wide swing", "do not dry peek Ticket after CT smoke fades"] },
+    { "location": "B Apartments", "side": "T", "principles": ["clear close angles before committing", "coordinate Short smoke or flash", "trade the first player instead of spacing too far"] },
+    { "location": "Connector", "side": "CT", "principles": ["avoid solo re-peek when Mid smoke is active", "preserve a rotate route", "communicate Window/Jungle contact"] }
+  ],
+  "usage": "General Mirage coaching reference only. Match events, positions and timing from the demo always take priority."
+}

@@ -245,6 +245,24 @@ button:disabled {
 
 .deep-analysis-button { margin-top: 1.25rem; background: #a371f7; color: #fff; }
 .deep-result { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #30363d; }
+.radar-trajectory { margin: 1rem 0 1.4rem; padding: 1rem; border: 1px solid #30363d; border-radius: .65rem; background: #0d1117; }
+.radar-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
+.radar-heading h4 { margin-top: 0; }
+.radar-heading > span { color: #79c0ff; font-size: .85rem; text-align: right; }
+.radar-canvas { position: relative; width: min(100%, 620px); margin: .8rem auto; aspect-ratio: 1; overflow: hidden; border: 1px solid #30363d; background: #05080c; }
+.radar-canvas img, .radar-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.radar-canvas img { object-fit: contain; }
+.radar-path { fill: none; stroke: #3fb950; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: .9; vector-effect: non-scaling-stroke; }
+.radar-event { stroke: #0d1117; stroke-width: 4; }
+.radar-event-shot { fill: #f4bf75; }
+.radar-event-damage_dealt, .radar-event-kill { fill: #3fb950; }
+.radar-event-damage_taken, .radar-event-death { fill: #ff7b72; }
+.radar-start { fill: #79c0ff; stroke: #fff; stroke-width: 3; }
+.radar-end { fill: #a371f7; stroke: #fff; stroke-width: 3; }
+.radar-legend { display: flex; flex-wrap: wrap; gap: .8rem; color: #8b949e; font-size: .82rem; }
+.radar-legend span { display: inline-flex; align-items: center; gap: .35rem; }
+.radar-legend i { width: .8rem; height: .8rem; display: inline-block; border-radius: 50%; }
+.legend-start { background: #79c0ff; }.legend-path { background: #3fb950; }.legend-event { background: #f4bf75; }.legend-end { background: #a371f7; }
 .duel-list { display: grid; gap: .75rem; }
 .duel-card { display: grid; gap: .6rem; padding: .9rem; border: 1px solid #30363d; border-radius: .5rem; background: #0d1117; }
 .duel-card > span { color: #8b949e; font-size: .9rem; }

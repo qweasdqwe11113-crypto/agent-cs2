@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { demoAnalysisQueue, playerRoundAnalysisQueue } from "../../../lib/demo-analysis-queue";
+import { loadTacticalKnowledge } from "../../../lib/tactical-knowledge";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,8 @@ type DeepAnalysis = {
   samples?: Array<{ frame: number; x: number; y: number; z: number; yaw: number; pitch: number; speed: number; health: number; armor: number; weapon: string }>;
   opponentSamples?: Array<{ frame: number; steamId64: string; name: string; x: number; y: number; z: number; health: number }>;
   events?: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }>;
+  summary?: { shotsFired: number; damageDealt: number; damageTaken: number; movingShots: number };
+  visibilityChecks?: Array<{ frame: number; opponent: string; nearCrosshair: boolean; blockedByGeometry: boolean; blockingDistance?: number }>;
 };
 
 const WEAPON_PROFILES: Record<string, { name: string; damage: number; armorPenetration: number; rpm: number; magazine: number; price: number }> = {
@@ -68,6 +71,24 @@ function aimRayCandidates(sample: NonNullable<DeepAnalysis["samples"]>[number], 
   }).sort((a, b) => a.perpendicularDistance - b.perpendicularDistance);
 }
 
+function compactDeepEvidence(value: unknown) {
+  const analysis = (value as { analysis?: DeepAnalysis } | undefined)?.analysis;
+  if (!analysis) return undefined;
+  const samples = analysis.samples ?? [];
+  const opponents = analysis.opponentSamples ?? [];
+  return {
+    roundNumber: analysis.roundNumber,
+    steamId64: analysis.steamId64,
+    initialState: analysis.initialState,
+    summary: analysis.summary,
+    events: (analysis.events ?? []).slice(0, 200),
+    visibilityChecks: (analysis.visibilityChecks ?? []).slice(0, 100),
+    sampleRange: samples.length ? { count: samples.length, firstFrame: samples[0]?.frame, lastFrame: samples.at(-1)?.frame } : { count: 0 },
+    opponentSampleRange: opponents.length ? { count: opponents.length, firstFrame: opponents[0]?.frame, lastFrame: opponents.at(-1)?.frame } : { count: 0 },
+    note: "完整逐帧位置、视角和敌方采样保留在服务端；需要精确帧数据时必须调用对应工具。",
+  };
+}
+
 function parseResponsesResult(responseText: string): ResponsesResult | undefined {
   try { return JSON.parse(responseText) as ResponsesResult; } catch { /* Try SSE below. */ }
   const events = [...responseText.matchAll(/^data:\s*(.+)$/gm)]
@@ -97,14 +118,15 @@ export async function POST(request: Request) {
     if (job && await job.getState() === "completed") deepResult = job.returnvalue;
   }
 
-  const evidence = JSON.stringify({ match: baseResult?.parsedDemo, selectedPlayerRoundAnalysis: deepResult });
+  const tacticalKnowledge = await loadTacticalKnowledge(baseResult?.parsedDemo?.mapName);
+  const evidence = JSON.stringify({ match: baseResult?.parsedDemo, selectedPlayerRoundAnalysis: compactDeepEvidence(deepResult), tacticalKnowledge });
   const response = await fetch(`${baseUrl}/responses`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
       model, store: false, stream: false, reasoning: { effort: "medium" },
       input: [
-        { role: "system", content: "你是 CS2 赛后复盘教练。只能依据提供的比赛证据回答，不要猜测。每条结论必须指出回合、玩家、帧或事件。若问题需要某位玩家某回合的移动、开火、伤害、交火或逐帧证据，而证据中没有该回合的 selectedPlayerRoundAnalysis，必须调用 analyze_player_round；仅当用户的问题可由当前证据回答时才直接回答。" },
+        { role: "system", content: "你是 CS2 赛后复盘教练。只能依据提供的比赛证据回答，不要猜测。战术知识库仅用于给出标准打法建议，不能被表述为本局已经发生的事实。每条结论必须指出回合、玩家、帧或事件。若问题需要某位玩家某回合的移动、开火、伤害、交火或逐帧证据，而证据中没有该回合的 selectedPlayerRoundAnalysis，必须调用 analyze_player_round；仅当用户的问题可由当前证据回答时才直接回答。" },
         { role: "system", content: `比赛证据：${evidence}` },
         { role: "system", content: "工具规则：问血量、护甲、速度、手持武器、开火前移动状态或某段移动时，若已有 selectedPlayerRoundAnalysis，调用对应的 get_player_* 工具；若没有，先调用 analyze_player_round。问武器基础伤害、穿甲、射速、弹匣或价格时调用 get_weapon_profile。" },
         { role: "system", content: "准星规则：评估预瞄或准星摆放时，调用 get_player_aim_at_frame、get_player_position_at_frame 或 get_aim_targeting_at_frame。视线工具可用敌方身体胶囊近似判断准星附近目标；在地图碰撞体与雷达标定完成前，禁止断言两者之间无墙体遮挡，或准星精确落在头部、墙角或具体点位。" },
