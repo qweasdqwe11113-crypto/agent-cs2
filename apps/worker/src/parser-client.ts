@@ -89,7 +89,7 @@ export interface PlayerRoundAnalysis {
   roundNumber: number;
   steamId64: string;
   initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string };
-  samples: Array<{ frame: number; x: number; y: number; z: number; speed: number; yaw: number; pitch: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string }>;
+  samples: Array<{ frame: number; x: number; y: number; z: number; speed: number; yaw: number; pitch: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string; navArea?: { id: number; hull: number; minZ: number; maxZ: number } }>;
   opponentSamples?: Array<{ frame: number; steamId64: string; name: string; x: number; y: number; z: number; health: number }>;
   events: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }>;
   summary: { shotsFired: number; damageDealt: number; damageTaken: number; movingShots: number };

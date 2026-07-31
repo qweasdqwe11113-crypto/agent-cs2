@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MapPreprocessor")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5ec8f0cf06eb12c6c2942d3ebb822ac33e207242")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b12fc7ef5b7ab39552fa9801c5064e95570660a0")]
 [assembly: System.Reflection.AssemblyProductAttribute("MapPreprocessor")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MapPreprocessor")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

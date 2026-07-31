@@ -7,7 +7,9 @@ import { DEMO_ANALYSIS_QUEUE, PLAYER_ROUND_ANALYSIS_QUEUE, type DemoAnalysisJob,
 import { analyzePlayerRound, parseDemo } from "./parser-client.js";
 import { analyzeShotVisibility } from "./map-collision.js";
 import { loadMirageRadarCalibration, worldToRadar } from "./map-calibration.js";
-import { getMirageCallout } from "./map-callouts.js";
+import { getMirageNavArea } from "./map-navmesh.js";
+import { getMirageOfficialPlace } from "./map-official-places.js";
+import { getMirageReferenceCallout } from "./map-callouts.js";
 
 export function createDemoAnalysisWorker() {
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
@@ -85,9 +87,13 @@ export function createPlayerRoundAnalysisWorker() {
       const calibration = await loadMirageRadarCalibration();
       analysis.samples = await Promise.all(analysis.samples.map(async (sample) => {
         const radar = worldToRadar(calibration, sample);
-        if (!radar) return sample;
-        const callout = await getMirageCallout(radar);
-        return callout ? { ...sample, radar, callout } : { ...sample, radar };
+        const navArea = await getMirageNavArea(sample);
+        // Curated overview regions are the display label; official NAV is kept
+        // alongside it for vertical-floor disambiguation and evidence.
+        const callout = radar ? getMirageReferenceCallout(radar) : undefined;
+        const officialCallout = await getMirageOfficialPlace(navArea?.id);
+        const displayCallout = callout ?? officialCallout;
+        return { ...sample, ...(radar ? { radar } : {}), ...(displayCallout ? { callout: displayCallout } : {}), ...(navArea ? { navArea } : {}) };
       }));
     }
     await job.updateProgress(75);

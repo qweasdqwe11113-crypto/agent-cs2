@@ -148,6 +148,7 @@ export default function HomePage() {
   const [chatAnswer, setChatAnswer] = useState<string | null>(null);
   const [isAsking, setIsAsking] = useState(false);
   const [pendingCoachQuestion, setPendingCoachQuestion] = useState<string | null>(null);
+  const [threeDimensionalMapEnabled, setThreeDimensionalMapEnabled] = useState(false);
 
   useEffect(() => {
     const savedJobId = window.localStorage.getItem("latest-demo-analysis-job");
@@ -205,7 +206,7 @@ export default function HomePage() {
     if (!jobId) return;
     setIsAsking(true); setChatAnswer(null);
     try {
-      const response = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message, baseAnalysisJobId: jobId, deepAnalysisJobId }) });
+      const response = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message, baseAnalysisJobId: jobId, deepAnalysisJobId, threeDimensionalMapEnabled }) });
       const responseText = await response.text();
       let payload: { answer?: string; error?: string; action?: string; deepAnalysisJobId?: string; roundNumber?: number; player?: { name: string; steamId64: string }; reason?: string };
       try { payload = JSON.parse(responseText) as typeof payload; } catch { throw new Error(`聊天服务返回了非 JSON 内容（HTTP ${response.status}）：${responseText.slice(0, 300) || "响应为空"}`); }
@@ -418,7 +419,7 @@ export default function HomePage() {
           ) : null}
         </section>
       ) : null}
-      <section className="coach-chat"><p className="eyebrow">AI COACH</p><h2>问比赛教练</h2><p className="hint">例如：为什么我这回合没打过？我什么时候移动开火了？</p><form onSubmit={askCoach}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="输入关于本局比赛的问题…" rows={3} /><button disabled={isAsking || jobId === null} type="submit">{isAsking ? "分析中…" : "提问"}</button></form>{chatAnswer ? <div className="chat-answer">{chatAnswer}</div> : null}</section>
+      <section className="coach-chat"><p className="eyebrow">AI COACH</p><h2>问比赛教练</h2><label className="map-detail-toggle"><input type="checkbox" checked={threeDimensionalMapEnabled} onChange={(event) => setThreeDimensionalMapEnabled(event.target.checked)} />启用 3D 地图分析（墙体遮挡、准星可见性、peek；默认关闭）</label><p className="hint">关闭时 AI 仅可使用二维雷达、z 高度层级与点位信息，不允许查询三维地图。</p><form onSubmit={askCoach}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="输入关于本局比赛的问题…" rows={3} /><button disabled={isAsking || jobId === null} type="submit">{isAsking ? "分析中…" : "提问"}</button></form>{chatAnswer ? <div className="chat-answer">{chatAnswer}</div> : null}</section>
     </main>
   );
 }
