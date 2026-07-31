@@ -12,14 +12,16 @@ import (
 )
 
 type playerRoundAnalysis struct {
-	SchemaVersion string        `json:"schemaVersion"`
-	RoundNumber   int           `json:"roundNumber"`
-	SteamID64     string        `json:"steamId64"`
-	InitialState  *initialState `json:"initialState"`
-	Samples       []stateSample `json:"samples"`
-	OpponentSamples []opponentSample `json:"opponentSamples"`
-	Events        []deepEvent   `json:"events"`
-	Summary       deepSummary   `json:"summary"`
+	SchemaVersion      string           `json:"schemaVersion"`
+	RoundNumber        int              `json:"roundNumber"`
+	SteamID64          string           `json:"steamId64"`
+	FreezeTimeEndFrame int              `json:"freezeTimeEndFrame,omitempty"`
+	RoundTimeSeconds   float64          `json:"roundTimeSeconds,omitempty"`
+	InitialState       *initialState    `json:"initialState"`
+	Samples            []stateSample    `json:"samples"`
+	OpponentSamples    []opponentSample `json:"opponentSamples"`
+	Events             []deepEvent      `json:"events"`
+	Summary            deepSummary      `json:"summary"`
 }
 
 type initialState struct {
@@ -99,6 +101,15 @@ func analyzePlayerRound(demoPath string, wantedRound int, steamID string) (resul
 	parser.RegisterEventHandler(func(events.RoundEnd) {
 		if round == wantedRound {
 			active = false
+		}
+	})
+	parser.RegisterEventHandler(func(events.RoundFreezetimeEnd) {
+		if !active {
+			return
+		}
+		result.FreezeTimeEndFrame = parser.CurrentFrame()
+		if roundTime, rulesErr := parser.GameState().Rules().RoundTime(); rulesErr == nil {
+			result.RoundTimeSeconds = roundTime.Seconds()
 		}
 	})
 	parser.RegisterEventHandler(func(events.FrameDone) {

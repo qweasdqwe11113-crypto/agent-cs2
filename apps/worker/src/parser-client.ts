@@ -88,6 +88,8 @@ export interface PlayerRoundAnalysis {
   schemaVersion: "v1" | "v2";
   roundNumber: number;
   steamId64: string;
+  freezeTimeEndFrame?: number;
+  roundTimeSeconds?: number;
   initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string };
   samples: Array<{ frame: number; x: number; y: number; z: number; speed: number; yaw: number; pitch: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string; navArea?: { id: number; hull: number; minZ: number; maxZ: number } }>;
   opponentSamples?: Array<{ frame: number; steamId64: string; name: string; x: number; y: number; z: number; health: number }>;

@@ -68,7 +68,7 @@ interface DeepTaskResponse {
   state: string;
   progress: number | object;
   failedReason?: string;
-  result?: { analysis: { summary: { shotsFired: number; damageDealt: number; damageTaken: number; movingShots: number }; initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string }; samples: Array<{ frame: number; x: number; y: number; z: number; yaw: number; pitch: number; speed: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string }>; events: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }> } };
+  result?: { analysis: { summary: { shotsFired: number; damageDealt: number; damageTaken: number; movingShots: number }; initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string }; freezeTimeEndFrame?: number; roundTimeSeconds?: number; samples: Array<{ frame: number; x: number; y: number; z: number; yaw: number; pitch: number; speed: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string }>; events: Array<{ frame: number; type: string; opponent: string; weapon: string; damage: number; speed: number; stopStatus?: string; confidence?: string }> } };
 }
 
 function taskStateText(state: string): string {
@@ -132,8 +132,66 @@ function RadarTrajectory({ samples, events }: { samples: NonNullable<DeepTaskRes
   const stride = Math.max(1, Math.ceil(points.length / 500));
   const path = points.filter((_, index) => index % stride === 0).map((sample) => `${sample.radar.x},${sample.radar.y}`).join(" ");
   const eventPoints = events.filter((event) => ["shot", "damage_dealt", "damage_taken", "kill", "death"].includes(event.type)).map((event) => ({ event, sample: points.reduce((nearest, sample) => Math.abs(sample.frame - event.frame) < Math.abs(nearest.frame - event.frame) ? sample : nearest) }));
-  const callouts = [...new Set(points.map((sample) => sample.callout).filter((callout): callout is string => Boolean(callout)))];
-  return <section className="radar-trajectory"><div className="radar-heading"><div><h4>回合轨迹雷达</h4><p className="hint">绿色为移动轨迹；圆点为开火、伤害与击杀等关键事件。</p></div><span>{callouts.length ? callouts.join(" → ") : "未进入已标注点位"}</span></div><div className="radar-canvas"><img src="/maps/de_mirage/radar.png" alt="Mirage 雷达图" /><svg viewBox="0 0 1024 1024" aria-label="玩家轨迹"><polyline points={path} className="radar-path" />{eventPoints.map(({ event, sample }, index) => <circle key={`${event.frame}-${index}`} cx={sample.radar.x} cy={sample.radar.y} r={event.type === "kill" || event.type === "death" ? 13 : 8} className={`radar-event radar-event-${event.type}`}><title>帧 {event.frame} · {deepEventText(event)}</title></circle>)}<circle cx={firstPoint.radar.x} cy={firstPoint.radar.y} r="10" className="radar-start"><title>回合起点</title></circle><circle cx={lastPoint.radar.x} cy={lastPoint.radar.y} r="10" className="radar-end"><title>回合终点</title></circle></svg></div><div className="radar-legend"><span><i className="legend-start" />起点</span><span><i className="legend-path" />轨迹</span><span><i className="legend-event" />关键事件</span><span><i className="legend-end" />终点</span></div></section>;
+  return <section className="radar-trajectory"><div className="radar-heading"><div><h4>回合轨迹雷达</h4><p className="hint">绿色为移动轨迹；圆点为开火、伤害与击杀等关键事件。</p></div></div><div className="radar-canvas"><img src="/maps/de_mirage/radar.png" alt="Mirage 雷达图" /><svg viewBox="0 0 1024 1024" aria-label="玩家轨迹"><polyline points={path} className="radar-path" />{eventPoints.map(({ event, sample }, index) => <circle key={`${event.frame}-${index}`} cx={sample.radar.x} cy={sample.radar.y} r={event.type === "kill" || event.type === "death" ? 13 : 8} className={`radar-event radar-event-${event.type}`}><title>帧 {event.frame} · {deepEventText(event)}</title></circle>)}<circle cx={firstPoint.radar.x} cy={firstPoint.radar.y} r="10" className="radar-start"><title>回合起点</title></circle><circle cx={lastPoint.radar.x} cy={lastPoint.radar.y} r="10" className="radar-end"><title>回合终点</title></circle></svg></div><div className="radar-legend"><span><i className="legend-start" />起点</span><span><i className="legend-path" />轨迹</span><span><i className="legend-event" />关键事件</span><span><i className="legend-end" />终点</span></div></section>;
+}
+
+function referencedRadarFrames(answer: string | null) {
+  if (!answer) return [];
+  const frames = [...answer.matchAll(/\[\[RADAR_FRAME:\s*(\d+)\]\]|(?:雷达帧|帧)\s*[:：]?\s*(\d+)/g)]
+    .map((match) => Number(match[1] ?? match[2]))
+    .filter((frame) => Number.isInteger(frame) && frame >= 0);
+  return [...new Set(frames)].slice(0, 3);
+}
+
+function cleanCoachAnswer(answer: string, firstFrame: number | undefined, tickRate: number) {
+  const withoutTokens = answer.replace(/\s*\[\[RADAR_FRAME:\s*\d+\]\]/g, "");
+  if (firstFrame === undefined) return withoutTokens;
+  // Guardrail for a provider that ignores the prompt and exposes a raw frame.
+  return withoutTokens.replace(/(?:第\s*)?(\d+)\s*帧/g, (_match, frameText: string) => `本回合 ${formatRoundElapsed(Number(frameText), firstFrame, tickRate)}`);
+}
+
+function formatRoundElapsed(frame: number, firstFrame: number, tickRate: number) {
+  const elapsedSeconds = Math.max(0, (frame - firstFrame) / Math.max(1, tickRate));
+  const minutes = Math.floor(elapsedSeconds / 60);
+  return `${minutes}:${(elapsedSeconds % 60).toFixed(1).padStart(4, "0")}`;
+}
+
+function formatElapsedInput(elapsedSeconds: number) {
+  const minutes = Math.floor(elapsedSeconds / 60);
+  return `${minutes}:${(elapsedSeconds % 60).toFixed(1).padStart(4, "0")}`;
+}
+
+function parseRoundClock(value: string) {
+  const trimmed = value.trim();
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  const match = trimmed.match(/^(\d+):(\d{1,2}(?:\.\d+)?)$/);
+  if (!match) return undefined;
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+  if (!Number.isFinite(minutes) || !Number.isFinite(seconds) || seconds >= 60) return undefined;
+  return minutes * 60 + seconds;
+}
+
+function RadarEvidenceCard({ frame, samples, events, tickRate }: { frame: number; samples: NonNullable<DeepTaskResponse["result"]>["analysis"]["samples"]; events: NonNullable<DeepTaskResponse["result"]>["analysis"]["events"]; tickRate: number }) {
+  const points = samples.filter((sample): sample is typeof sample & { radar: { x: number; y: number } } => sample.radar !== undefined);
+  if (points.length === 0) return null;
+  const selected = points.reduce((nearest, sample) => Math.abs(sample.frame - frame) < Math.abs(nearest.frame - frame) ? sample : nearest);
+  const roundElapsed = formatRoundElapsed(selected.frame, points[0]!.frame, tickRate);
+  const windowStart = selected.frame - 192;
+  const windowEnd = selected.frame + 192;
+  const windowPoints = points.filter((sample) => sample.frame >= windowStart && sample.frame <= windowEnd);
+  const stride = Math.max(1, Math.ceil(windowPoints.length / 180));
+  const path = windowPoints.filter((_, index) => index % stride === 0).map((sample) => `${sample.radar.x},${sample.radar.y}`).join(" ");
+  const nearbyEvents = events.filter((event) => event.frame >= windowStart && event.frame <= windowEnd).map((event) => ({ event, sample: points.reduce((nearest, sample) => Math.abs(sample.frame - event.frame) < Math.abs(nearest.frame - event.frame) ? sample : nearest) }));
+  const yawRadians = selected.yaw * Math.PI / 180;
+  const arrowX = selected.radar.x + Math.cos(yawRadians) * 46;
+  const arrowY = selected.radar.y - Math.sin(yawRadians) * 46;
+  return <article className="radar-evidence-card">
+    <div className="radar-evidence-heading"><strong>雷达证据 · 本回合 {roundElapsed}</strong><span>{selected.frame === frame ? "AI 引用时刻" : "引用时刻附近"}</span></div>
+    <div className="radar-evidence-map"><img src="/maps/de_mirage/radar.png" alt={`帧 ${selected.frame} 的 Mirage 雷达位置`} /><svg viewBox="0 0 1024 1024" aria-label="AI 引用位置"><polyline points={path} className="radar-evidence-path" />{nearbyEvents.map(({ event, sample }, index) => <circle key={`${event.frame}-${index}`} cx={sample.radar.x} cy={sample.radar.y} r="7" className={`radar-event radar-event-${event.type}`}><title>帧 {event.frame} · {deepEventText(event)}</title></circle>)}<line x1={selected.radar.x} y1={selected.radar.y} x2={arrowX} y2={arrowY} className="radar-evidence-heading-arrow" /><circle cx={selected.radar.x} cy={selected.radar.y} r="13" className="radar-evidence-position" /></svg></div>
+    <div className="radar-evidence-meta"><span>雷达 {Math.round(selected.radar.x)}, {Math.round(selected.radar.y)}</span><span>Z 高度 {Math.round(selected.z)}</span><span>{selected.speed.toFixed(0)} u/s · {selected.weapon}</span>{selected.callout ? <span>图片点位近似：{selected.callout}</span> : <span>图片点位：未标注</span>}</div>
+    <p className="hint">展示该帧前后约 3 秒二维轨迹；箭头为玩家平面朝向，点位名称仅作图片区域近似。</p>
+  </article>;
 }
 
 export default function HomePage() {
@@ -149,6 +207,9 @@ export default function HomePage() {
   const [isAsking, setIsAsking] = useState(false);
   const [pendingCoachQuestion, setPendingCoachQuestion] = useState<string | null>(null);
   const [threeDimensionalMapEnabled, setThreeDimensionalMapEnabled] = useState(false);
+  const [requestedRoundClock, setRequestedRoundClock] = useState("");
+  const [requestedRadarFrame, setRequestedRadarFrame] = useState<number | null>(null);
+  const [requestedRadarError, setRequestedRadarError] = useState<string | null>(null);
 
   useEffect(() => {
     const savedJobId = window.localStorage.getItem("latest-demo-analysis-job");
@@ -200,6 +261,8 @@ export default function HomePage() {
     const response = await fetch("/api/deep-analysis", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ baseAnalysisJobId: jobId, roundNumber: selectedRound.number, steamId64: selectedPlayer.steamId64 }) });
     const payload = await response.json() as { jobId?: string; error?: string };
     if (!response.ok || !payload.jobId) { setStatus(payload.error ?? "无法创建深度分析任务。"); return; }
+    setRequestedRadarFrame(null);
+    setRequestedRadarError(null);
     setDeepTask({ id: payload.jobId, state: "waiting", progress: 0 });
   }
   async function requestCoach(message: string, deepAnalysisJobId = deepTask?.id) {
@@ -253,6 +316,42 @@ export default function HomePage() {
     ...(deepAnalysis.summary.shotsFired > 0 && deepAnalysis.summary.damageDealt === 0 ? ["有开火但未造成伤害；建议复盘首个交火点的预瞄高度与第一发时机。"] : []),
   ];
   const duels = deepAnalysis === undefined ? [] : buildDuels(deepAnalysis.events);
+  const coachRadarFrames = referencedRadarFrames(chatAnswer);
+  const roundTime = (frame: number) => formatRoundElapsed(frame, deepAnalysis?.samples[0]?.frame ?? frame, parsedDemo?.tickRate ?? 64);
+  const manualRadarFirstFrame = deepAnalysis?.samples[0]?.frame;
+  const manualRadarLastFrame = deepAnalysis?.samples.at(-1)?.frame;
+  const manualRadarMaxElapsedSeconds = manualRadarFirstFrame === undefined || manualRadarLastFrame === undefined
+    ? 0
+    : (manualRadarLastFrame - manualRadarFirstFrame) / (parsedDemo?.tickRate ?? 64);
+
+  function setRequestedRadarAtElapsedSeconds(elapsedSeconds: number) {
+    if (!deepAnalysis || manualRadarFirstFrame === undefined) {
+      setRequestedRadarError("当前深度分析没有可用的位置采样，请重新生成深度分析。");
+      return;
+    }
+    const clampedSeconds = Math.max(0, Math.min(manualRadarMaxElapsedSeconds, elapsedSeconds));
+    setRequestedRoundClock(formatElapsedInput(clampedSeconds));
+    setRequestedRadarError(null);
+    setRequestedRadarFrame(Math.round(manualRadarFirstFrame + clampedSeconds * (parsedDemo?.tickRate ?? 64)));
+  }
+
+  function showRequestedRadarFrame(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!deepAnalysis || deepAnalysis.samples.length === 0) {
+      setRequestedRadarError("当前深度分析没有可用的位置采样，请重新生成深度分析。");
+      return;
+    }
+    const elapsedSeconds = parseRoundClock(requestedRoundClock);
+    const firstFrame = deepAnalysis.samples[0]!.frame;
+    const lastFrame = deepAnalysis.samples.at(-1)!.frame;
+    const maxElapsedSeconds = (lastFrame - firstFrame) / (parsedDemo?.tickRate ?? 64);
+    if (elapsedSeconds === undefined || elapsedSeconds < 0 || elapsedSeconds > maxElapsedSeconds) {
+      setRequestedRadarFrame(null);
+      setRequestedRadarError(`请输入有效经过时间（0:00.0 至 ${formatRoundElapsed(lastFrame, firstFrame, parsedDemo?.tickRate ?? 64)}）。`);
+      return;
+    }
+    setRequestedRadarAtElapsedSeconds(elapsedSeconds);
+  }
 
   async function submitDemo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -407,8 +506,9 @@ export default function HomePage() {
                         {deepAnalysis.initialState ? <><h4>回合概览</h4><div className="player-stats"><div><span>起始血甲</span><strong>{deepAnalysis.initialState.health} / {deepAnalysis.initialState.armor}</strong></div><div><span>现金</span><strong>${deepAnalysis.initialState.money}</strong></div><div><span>装备价值</span><strong>${deepAnalysis.initialState.equipmentValue}</strong></div><div><span>主武器</span><strong>{deepAnalysis.initialState.weapon}</strong></div></div></> : null}
                         <div className="player-stats"><div><span>开火</span><strong>{deepAnalysis.summary.shotsFired}</strong></div><div><span>移动开火</span><strong>{deepAnalysis.summary.movingShots}</strong></div><div><span>造成伤害</span><strong>{deepAnalysis.summary.damageDealt}</strong></div><div><span>承受伤害</span><strong>{deepAnalysis.summary.damageTaken}</strong></div></div>
                         <h4>路线与状态</h4><p className="hint">已按需采集 {deepAnalysis.samples.length} 个状态点。</p><RadarTrajectory samples={deepAnalysis.samples} events={deepAnalysis.events} />
-                        <h4>对枪卡片</h4>{duels.length > 0 ? <div className="duel-list">{duels.map((duel, index) => <article className="duel-card" key={`${duel.opponent}-${duel.startFrame}`}><strong>交火 {index + 1} · {duel.opponent}</strong><span>帧 {duel.startFrame} – {duel.endFrame} · {duel.outcome}</span><div><b>造成伤害 {duel.dealt}</b><b>承受伤害 {duel.taken}</b></div><ol className="event-list">{duel.shots.map((event, eventIndex) => <li key={`${event.frame}-${eventIndex}`}>{deepEventText(event)}{event.type === "shot" ? ` · ${event.stopStatus} · ${event.speed.toFixed(1)} u/s` : ""}</li>)}</ol></article>)}</div> : <p className="hint">本回合未找到可归类的对手交火。</p>}
-                        <details><summary>展开全部原始事件证据</summary><ol className="event-list">{deepAnalysis.events.map((event, index) => <li key={`${event.frame}-${index}`}><strong>帧 {event.frame}</strong> · {deepEventText(event)} {event.type === "shot" ? `· ${event.stopStatus}（${event.confidence}）· 速度 ${event.speed.toFixed(1)}` : event.damage > 0 ? `· ${event.damage} 伤害` : ""}</li>)}</ol></details>
+                        <section className="manual-radar-evidence"><h4>指定时间雷达位置</h4><p className="hint">拖动进度条或输入本回合经过时间（例如 0:18.6 或 18.6），根据已解析的真实 Demo 坐标生成雷达图片。</p><div className="manual-radar-slider"><label htmlFor="requested-round-slider">0:00.0</label><input id="requested-round-slider" type="range" min="0" max={manualRadarMaxElapsedSeconds} step="0.1" value={Math.min(manualRadarMaxElapsedSeconds, Math.max(0, parseRoundClock(requestedRoundClock) ?? 0))} onChange={(event) => setRequestedRadarAtElapsedSeconds(Number(event.target.value))} /><label>{formatElapsedInput(manualRadarMaxElapsedSeconds)}</label></div><form onSubmit={showRequestedRadarFrame}><label htmlFor="requested-round-clock">回合经过时间</label><input id="requested-round-clock" value={requestedRoundClock} onChange={(event) => setRequestedRoundClock(event.target.value)} placeholder="0:18.6" inputMode="decimal" /><button type="submit">生成图片</button></form>{requestedRadarError ? <p className="error">{requestedRadarError}</p> : null}{requestedRadarFrame !== null ? <div className="radar-evidence-list"><RadarEvidenceCard frame={requestedRadarFrame} samples={deepAnalysis.samples} events={deepAnalysis.events} tickRate={parsedDemo?.tickRate ?? 64} /></div> : null}</section>
+                        <h4>对枪卡片</h4>{duels.length > 0 ? <div className="duel-list">{duels.map((duel, index) => <article className="duel-card" key={`${duel.opponent}-${duel.startFrame}`}><strong>交火 {index + 1} · {duel.opponent}</strong><span>本回合 {roundTime(duel.startFrame)} – {roundTime(duel.endFrame)} · {duel.outcome}</span><div><b>造成伤害 {duel.dealt}</b><b>承受伤害 {duel.taken}</b></div><ol className="event-list">{duel.shots.map((event, eventIndex) => <li key={`${event.frame}-${eventIndex}`}><strong>本回合 {roundTime(event.frame)}</strong> · {deepEventText(event)}{event.type === "shot" ? ` · ${event.stopStatus} · ${event.speed.toFixed(1)} u/s` : ""}</li>)}</ol></article>)}</div> : <p className="hint">本回合未找到可归类的对手交火。</p>}
+                        <details><summary>展开全部原始事件证据</summary><ol className="event-list">{deepAnalysis.events.map((event, index) => <li key={`${event.frame}-${index}`}><strong>本回合 {roundTime(event.frame)}</strong> · {deepEventText(event)} {event.type === "shot" ? `· ${event.stopStatus}（${event.confidence}）· 速度 ${event.speed.toFixed(1)}` : event.damage > 0 ? `· ${event.damage} 伤害` : ""}</li>)}</ol></details>
                         <h4>本回合训练建议</h4><ol className="event-list">{coachingInsights.map((insight) => <li key={insight}>{insight}</li>)}</ol>
                       </> : <p className="hint">任务正在排队或分析中；仅此玩家此回合会被重放解析。</p>}</section> : null}
                     </div>
@@ -419,7 +519,7 @@ export default function HomePage() {
           ) : null}
         </section>
       ) : null}
-      <section className="coach-chat"><p className="eyebrow">AI COACH</p><h2>问比赛教练</h2><label className="map-detail-toggle"><input type="checkbox" checked={threeDimensionalMapEnabled} onChange={(event) => setThreeDimensionalMapEnabled(event.target.checked)} />启用 3D 地图分析（墙体遮挡、准星可见性、peek；默认关闭）</label><p className="hint">关闭时 AI 仅可使用二维雷达、z 高度层级与点位信息，不允许查询三维地图。</p><form onSubmit={askCoach}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="输入关于本局比赛的问题…" rows={3} /><button disabled={isAsking || jobId === null} type="submit">{isAsking ? "分析中…" : "提问"}</button></form>{chatAnswer ? <div className="chat-answer">{chatAnswer}</div> : null}</section>
+      <section className="coach-chat"><p className="eyebrow">AI COACH</p><h2>问比赛教练</h2><label className="map-detail-toggle"><input type="checkbox" checked={threeDimensionalMapEnabled} onChange={(event) => setThreeDimensionalMapEnabled(event.target.checked)} />启用 3D 地图分析（墙体遮挡、准星可见性、peek；默认关闭）</label><p className="hint">关闭时 AI 仅可使用二维雷达、z 高度层级与点位信息，不允许查询三维地图。</p><form onSubmit={askCoach}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="输入关于本局比赛的问题…" rows={3} /><button disabled={isAsking || jobId === null} type="submit">{isAsking ? "分析中…" : "提问"}</button></form>{chatAnswer ? <div className="chat-answer">{cleanCoachAnswer(chatAnswer, deepAnalysis?.samples[0]?.frame, parsedDemo?.tickRate ?? 64)}</div> : null}{deepAnalysis && coachRadarFrames.length > 0 ? <section className="coach-radar-evidence"><h3>AI 引用位置</h3><p className="hint">以下雷达卡由已解析的真实 Demo 坐标生成，不由 AI 绘制。</p><div className="radar-evidence-list">{coachRadarFrames.map((frame) => <RadarEvidenceCard key={frame} frame={frame} samples={deepAnalysis.samples} events={deepAnalysis.events} tickRate={parsedDemo?.tickRate ?? 64} />)}</div></section> : null}</section>
     </main>
   );
 }

@@ -252,7 +252,7 @@ button:disabled {
 .radar-canvas { position: relative; width: min(100%, 620px); margin: .8rem auto; aspect-ratio: 1; overflow: hidden; border: 1px solid #30363d; background: #05080c; }
 .radar-canvas img, .radar-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .radar-canvas img { object-fit: contain; }
-.radar-path { fill: none; stroke: #3fb950; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: .9; vector-effect: non-scaling-stroke; }
+.radar-path { fill: none; stroke: #3fb950; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: .9; vector-effect: non-scaling-stroke; }
 .radar-event { stroke: #0d1117; stroke-width: 4; }
 .radar-event-shot { fill: #f4bf75; }
 .radar-event-damage_dealt, .radar-event-kill { fill: #3fb950; }
@@ -263,6 +263,15 @@ button:disabled {
 .radar-legend span { display: inline-flex; align-items: center; gap: .35rem; }
 .radar-legend i { width: .8rem; height: .8rem; display: inline-block; border-radius: 50%; }
 .legend-start { background: #79c0ff; }.legend-path { background: #3fb950; }.legend-event { background: #f4bf75; }.legend-end { background: #a371f7; }
+.manual-radar-evidence { margin: 1.25rem 0; padding: 1rem; border: 1px solid #30363d; border-radius: .65rem; background: #0d1117; }
+.manual-radar-evidence h4 { margin: 0 0 .3rem; }
+.manual-radar-slider { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .65rem; margin: .9rem 0; color: #8b949e; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.manual-radar-slider input { width: 100%; accent-color: #a371f7; cursor: pointer; }
+.manual-radar-evidence form { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin: .85rem 0 1rem; }
+.manual-radar-evidence label { color: #c9d1d9; font-size: .9rem; }
+.manual-radar-evidence input { width: 8rem; border: 1px solid #30363d; border-radius: .4rem; padding: .5rem .6rem; background: #161b22; color: #e6edf3; font: inherit; }
+.manual-radar-evidence .manual-radar-slider input { width: 100%; min-width: 0; }
+.manual-radar-evidence button { padding: .5rem .8rem; }
 .duel-list { display: grid; gap: .75rem; }
 .duel-card { display: grid; gap: .6rem; padding: .9rem; border: 1px solid #30363d; border-radius: .5rem; background: #0d1117; }
 .duel-card > span { color: #8b949e; font-size: .9rem; }
@@ -276,6 +285,20 @@ summary { cursor: pointer; }
 .coach-chat form { display: grid; gap: .75rem; }
 .coach-chat textarea { width: 100%; resize: vertical; border: 1px solid #30363d; border-radius: .5rem; padding: .75rem; background: #0d1117; color: #e6edf3; font: inherit; }
 .chat-answer { white-space: pre-wrap; margin-top: 1rem; padding: 1rem; border-radius: .5rem; background: #0d1117; line-height: 1.7; }
+.coach-radar-evidence { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #30363d; }
+.coach-radar-evidence h3 { margin: 0 0 .25rem; font-size: 1rem; }
+.radar-evidence-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .85rem; }
+.radar-evidence-card { min-width: 0; padding: .8rem; border: 1px solid #30363d; border-radius: .6rem; background: #0d1117; }
+.radar-evidence-heading { display: flex; justify-content: space-between; gap: .5rem; align-items: baseline; margin-bottom: .55rem; }
+.radar-evidence-heading span { color: #79c0ff; font-size: .75rem; text-align: right; }
+.radar-evidence-map { position: relative; aspect-ratio: 1; overflow: hidden; border: 1px solid #30363d; background: #05080c; }
+.radar-evidence-map img, .radar-evidence-map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.radar-evidence-map img { object-fit: contain; }
+.radar-evidence-path { fill: none; stroke: #f4bf75; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: .92; vector-effect: non-scaling-stroke; }
+.radar-evidence-position { fill: #a371f7; stroke: #fff; stroke-width: 4; }
+.radar-evidence-heading-arrow { stroke: #fff; stroke-width: 5; stroke-linecap: round; marker-end: none; }
+.radar-evidence-meta { display: flex; flex-wrap: wrap; gap: .4rem .65rem; margin-top: .65rem; color: #aab6c4; font-size: .77rem; }
+.radar-evidence-meta span { padding: .18rem .35rem; border-radius: .25rem; background: #161b22; }
 
 table {
   width: 100%;
@@ -310,4 +333,5 @@ th {
   .player-stats {
     grid-template-columns: 1fr;
   }
+  .manual-radar-evidence form { align-items: stretch; }
 }

@@ -21,7 +21,9 @@ export async function POST(request: Request) {
   if (!demoPath) return NextResponse.json({ error: "基础任务没有可用的 demo 文件。" }, { status: 409 });
   const roundNumber = body.roundNumber as number;
   const steamId64 = body.steamId64 as string;
-  const jobId = `deep-v6-${body.baseAnalysisJobId}-${roundNumber}-${steamId64}`;
+  // Keep manual deep-analysis requests in sync with the parser schema. A new
+  // key prevents old cached jobs (without round-clock metadata) being reused.
+  const jobId = `deep-v11-${body.baseAnalysisJobId}-${roundNumber}-${steamId64}`;
   if (!mapName) return NextResponse.json({ error: "地图信息不可用。" }, { status: 409 });
   const job = await playerRoundAnalysisQueue.add("analyze-player-round", { baseAnalysisJobId: body.baseAnalysisJobId, demoPath, mapName, roundNumber, steamId64 }, { jobId });
   return NextResponse.json({ jobId: job.id }, { status: 202 });

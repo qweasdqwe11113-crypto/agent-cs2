@@ -6,6 +6,7 @@
  */
 type Point = [number, number];
 type Region = { name: string; polygon: Point[] };
+type WorldPrism = { name: string; minX: number; maxX: number; minY: number; maxY: number; minZ: number; maxZ: number };
 
 function contains(point: { x: number; y: number }, polygon: Point[]) {
   let inside = false;
@@ -58,7 +59,28 @@ const MIRAGE_REFERENCE_REGIONS: Region[] = [
   { name: "A 二楼", polygon: [[740, 760], [900, 760], [900, 890], [740, 890]] },
 ];
 
-export function getMirageReferenceCallout(radar: { x: number; y: number }) {
+/**
+ * High-confidence hard partitions calibrated against actual deep-demo samples.
+ * They take precedence over the visual overview polygons.  The Z interval is
+ * intentional: the same radar X/Y can contain a different floor.
+ */
+const MIRAGE_WORLD_PRISMS: WorldPrism[] = [
+  // B connector ends at its east/low edge; the next ground-level area is B site.
+  { name: "B 连接", minX: -1350, maxX: -1075, minY: 270, maxY: 350, minZ: -225, maxZ: -90 },
+  { name: "B 包点", minX: -2400, maxX: -900, minY: -100, maxY: 340, minZ: -260, maxZ: -80 },
+  { name: "超市", minX: -2050, maxX: -1750, minY: -650, maxY: -200, minZ: -260, maxZ: -80 },
+];
+
+function prismVolume(prism: WorldPrism) {
+  return (prism.maxX - prism.minX) * (prism.maxY - prism.minY) * (prism.maxZ - prism.minZ);
+}
+
+export function getMirageReferenceCallout(world: { x: number; y: number; z: number }, radar: { x: number; y: number }) {
+  const hardMatch = MIRAGE_WORLD_PRISMS
+    .filter((prism) => world.x >= prism.minX && world.x <= prism.maxX && world.y >= prism.minY && world.y <= prism.maxY && world.z >= prism.minZ && world.z <= prism.maxZ)
+    .sort((left, right) => prismVolume(left) - prismVolume(right))[0];
+  if (hardMatch) return hardMatch.name;
+
   return MIRAGE_REFERENCE_REGIONS
     .filter((region) => contains(radar, region.polygon))
     .sort((left, right) => area(left.polygon) - area(right.polygon))[0]?.name;

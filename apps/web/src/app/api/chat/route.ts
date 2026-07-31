@@ -26,6 +26,8 @@ type ResponsesResult = {
 type DeepAnalysis = {
   roundNumber?: number;
   steamId64?: string;
+  freezeTimeEndFrame?: number;
+  roundTimeSeconds?: number;
   initialState?: { frame: number; health: number; armor: number; money: number; equipmentValue: number; weapon: string };
   samples?: Array<{ frame: number; x: number; y: number; z: number; yaw: number; pitch: number; speed: number; health: number; armor: number; weapon: string; radar?: { x: number; y: number }; callout?: string; navArea?: { id: number; hull: number; minZ: number; maxZ: number } }>;
   opponentSamples?: Array<{ frame: number; steamId64: string; name: string; x: number; y: number; z: number; health: number }>;
@@ -88,7 +90,7 @@ function aimRayCandidates(sample: NonNullable<DeepAnalysis["samples"]>[number], 
   }).sort((a, b) => a.perpendicularDistance - b.perpendicularDistance);
 }
 
-function compactDeepEvidence(value: unknown, threeDimensionalMapEnabled: boolean) {
+function compactDeepEvidence(value: unknown, threeDimensionalMapEnabled: boolean, tickRate: number | undefined) {
   const analysis = (value as { analysis?: DeepAnalysis } | undefined)?.analysis;
   if (!analysis) return undefined;
   const samples = analysis.samples ?? [];
@@ -101,6 +103,7 @@ function compactDeepEvidence(value: unknown, threeDimensionalMapEnabled: boolean
     events: (analysis.events ?? []).slice(0, 200),
     visibilityChecks: threeDimensionalMapEnabled ? (analysis.visibilityChecks ?? []).slice(0, 100) : undefined,
     sampleRange: samples.length ? { count: samples.length, firstFrame: samples[0]?.frame, lastFrame: samples.at(-1)?.frame } : { count: 0 },
+    roundTiming: samples.length ? { firstSampleFrame: samples[0]?.frame, tickRate: tickRate ?? 64, userFacingFormat: "round elapsed time = (frame - firstSampleFrame) / tickRate; communicate as M:SS.s, not a frame number" } : { available: false, reason: "No deep samples are available." },
     radarSummary: { calibratedSamples: samples.filter((sample) => sample.radar !== undefined).length, callouts: [...new Set(samples.map((sample) => sample.callout).filter(Boolean))] },
     navSummary: { officialNavSamples: samples.filter((sample) => sample.navArea !== undefined).length, uniqueAreas: [...new Set(samples.map((sample) => sample.navArea?.id).filter((id): id is number => id !== undefined))] },
     opponentSampleRange: opponents.length ? { count: opponents.length, firstFrame: opponents[0]?.frame, lastFrame: opponents.at(-1)?.frame } : { count: 0 },
@@ -141,14 +144,14 @@ export async function POST(request: Request) {
   const tacticalKnowledge = await loadTacticalKnowledge(baseResult?.parsedDemo?.mapName);
   const platformCapabilities = baseResult?.parsedDemo?.mapName === "de_mirage" ? {
     radarCalibration: "enabled: official 1024x1024 radar calibration; deep-v5 analyses include world-to-radar coordinates",
-    callouts: "enabled: 23 official env_cs_place anchors (including Catwalk, Underpass, Connector and SnipersNest) bound to official NAV polygons; labels are not extrapolated beyond their verified NAV area",
+    callouts: "enabled: Chinese tactical callouts strictly follow the user-provided Mirage overview; unlabelled overview areas remain unnamed instead of falling back to Source 2 place names",
     navigationMesh: threeDimensionalMapEnabled ? "enabled: official de_mirage.nav polygons with area ID and vertical range; this distinguishes overlapping floors" : "2D/NAV mode: area ID and vertical range support radar callouts and overlapping-floor distinction; 3D polygons are not exposed to AI",
     mapAccessMode: threeDimensionalMapEnabled ? "3D enabled by the user: collision, aim-ray and peek evidence may be queried." : "2D-only (default): only radar X/Y, Z height layer and NAV/callout data may be used; 3D collision, aim-ray, visibility and peek queries are forbidden.",
     collision: threeDimensionalMapEnabled ? "enabled: shot-frame aim rays against Mirage collision hulls" : "disabled by user setting",
     trajectory: "enabled: web renders a selected player's radar trajectory from deep-v5 samples",
     limitation: "Team-wide tactical classification still requires a separate all-player round analysis.",
   } : undefined;
-  const evidence = JSON.stringify({ platformCapabilities, match: baseResult?.parsedDemo, selectedPlayerRoundAnalysis: compactDeepEvidence(deepResult, threeDimensionalMapEnabled), tacticalKnowledge });
+  const evidence = JSON.stringify({ platformCapabilities, match: baseResult?.parsedDemo, selectedPlayerRoundAnalysis: compactDeepEvidence(deepResult, threeDimensionalMapEnabled, baseResult?.parsedDemo?.tickRate), tacticalKnowledge });
   const response = await fetch(`${baseUrl}/responses`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${apiKey}` },
@@ -156,6 +159,8 @@ export async function POST(request: Request) {
       model, store: false, stream: false, reasoning: { effort: "medium" },
       input: [
         { role: "system", content: threeDimensionalMapEnabled ? "3D map analysis is explicitly enabled by the user for this request." : "STRICT 2D MAP MODE: 3D map access is disabled by the user. Do not request, infer, or claim line-of-sight, aim-ray intersection, wall occlusion, visibility, peek geometry, world X/Y geometry, yaw, or pitch. Use only radar X/Y, Z height layer, NAV/callout, and match events. Tell the user to manually enable 3D map analysis for those questions." },
+        { role: "system", content: "When a completed deep analysis supports a location-specific coaching conclusion, cite one to three concrete frames using exactly [[RADAR_FRAME: 12345]]. The web client turns this token into a deterministic 2D radar evidence card from demo coordinates. Never emit a radar-frame token without evidence. Do not describe it as an AI-generated image." },
+        { role: "system", content: "User-facing communication rule: never use Demo frame numbers in prose. When roundTiming is available, refer to elapsed round time only, for example ‘第 4 回合 0:23.4 时’. [[RADAR_FRAME: ...]] is an internal hidden UI token only and must not be explained to the user." },
         { role: "system", content: "你是 CS2 赛后复盘教练。只能依据提供的比赛证据回答，不要猜测。platformCapabilities 描述平台已实现的能力；selectedPlayerRoundAnalysis 描述当前所选回合是否已有可用数据。用户询问‘你现在能不能’时，必须先按 platformCapabilities 回答，不能因为当前没有深度任务就否认平台已启用的能力。战术知识库仅用于给出标准打法建议，不能被表述为本局已经发生的事实。每条结论必须指出回合、玩家、帧或事件。若问题需要某位玩家某回合的移动、开火、伤害、交火或逐帧证据，而证据中没有该回合的 selectedPlayerRoundAnalysis，必须调用 analyze_player_round；仅当用户的问题可由当前证据回答时才直接回答。" },
         { role: "system", content: `比赛证据：${evidence}` },
         { role: "system", content: "工具规则：问血量、护甲、速度、手持武器、开火前移动状态或某段移动时，若已有 selectedPlayerRoundAnalysis，调用对应的 get_player_* 工具；若没有，先调用 analyze_player_round。问武器基础伤害、穿甲、射速、弹匣或价格时调用 get_weapon_profile。" },
@@ -240,7 +245,7 @@ export async function POST(request: Request) {
     if (!demoPath) return NextResponse.json({ error: "当前比赛找不到可供深度分析的 Demo 文件。" }, { status: 409 });
     // Bump the cache key when callout calibration changes so old coarse labels
     // are never reused for a newly requested coaching answer.
-    const jobId = `deep-v7-${body.baseAnalysisJobId}-${round.number}-${player.steamId64}`;
+    const jobId = `deep-v11-${body.baseAnalysisJobId}-${round.number}-${player.steamId64}`;
     const existing = await playerRoundAnalysisQueue.getJob(jobId);
     const mapName = baseResult?.parsedDemo?.mapName;
     if (!mapName) return NextResponse.json({ error: "地图信息不可用。" }, { status: 409 });
@@ -296,7 +301,7 @@ export async function POST(request: Request) {
       else toolResult = { available: true, roundNumber: deepAnalysis.roundNumber, initialState: deepAnalysis.initialState, weaponsObserved: [...new Set([deepAnalysis.initialState.weapon, ...(deepAnalysis.samples ?? []).map((sample) => sample.weapon), ...(deepAnalysis.events ?? []).map((event) => event.weapon)])].filter((weapon) => weapon && weapon !== "unknown") };
     } else if (toolCall.name === "get_player_route") {
       const samples = deepAnalysis?.samples ?? [];
-      if (!samples.some((sample) => sample.callout)) toolResult = { available: false, reason: "当前深度分析未经过已验证的官方点位锚区；请重新生成 deep-v5 分析，或使用官方 NAV 区域 ID 查询位置。" };
+      if (!samples.some((sample) => sample.callout)) toolResult = { available: false, reason: "当前深度分析未经过用户提供的中文雷达图已标注区域；该区域不会被强行命名。" };
       else {
         const segments: Array<{ callout: string; enterFrame: number; leaveFrame: number; samples: number }> = [];
         for (const sample of samples) {
@@ -328,10 +333,10 @@ export async function POST(request: Request) {
       }
     } else if (toolCall.name === "get_map_info" && !threeDimensionalMapEnabled) {
       const match = baseResult?.parsedDemo;
-      toolResult = { mapName: match?.mapName, tickRate: match?.tickRate, totalFrames: match?.totalFrames, roundCount: match?.rounds?.length ?? 0, playerCount: match?.players?.filter((player) => !player.isBot).length ?? 0, mapAccessMode: "2D-only", mirage: match?.mapName === "de_mirage" ? { radarCalibration: "official overview calibration enabled", navigation: "NAV area identifiers and Z height layers enabled; 3D polygon geometry disabled", namedCallouts: "official callouts bound to verified NAV areas" } : undefined, coordinateSystem: "Only calibrated radar X/Y, Z height layer, NAV area and callout data are available. World X/Y geometry is disabled." };
+      toolResult = { mapName: match?.mapName, tickRate: match?.tickRate, totalFrames: match?.totalFrames, roundCount: match?.rounds?.length ?? 0, playerCount: match?.players?.filter((player) => !player.isBot).length ?? 0, mapAccessMode: "2D-only", mirage: match?.mapName === "de_mirage" ? { radarCalibration: "official overview calibration enabled", navigation: "NAV area identifiers and Z height layers enabled; 3D polygon geometry disabled", namedCallouts: "Chinese tactical callouts strictly follow the supplied reference overview; unmarked areas remain unnamed" } : undefined, coordinateSystem: "Only calibrated radar X/Y, Z height layer, NAV area and callout data are available. World X/Y geometry is disabled." };
     } else if (toolCall.name === "get_map_info") {
       const match = baseResult?.parsedDemo;
-      toolResult = { mapName: match?.mapName, tickRate: match?.tickRate, totalFrames: match?.totalFrames, roundCount: match?.rounds?.length ?? 0, playerCount: match?.players?.filter((player) => !player.isBot).length ?? 0, mirage: match?.mapName === "de_mirage" ? { radarCalibration: "official overview calibration enabled", navMesh: "official de_mirage.nav parsed: 2544 walkable areas with 3D polygons", namedCallouts: "23 official env_cs_place anchors are bound to matching NAV polygons; labels are deliberately not extrapolated to neighbouring areas" } : undefined, coordinateSystem: "Demo world coordinates; a Mirage deep-v5 sample may also include calibrated radar coordinates and an official NAV area ID with vertical range." };
+      toolResult = { mapName: match?.mapName, tickRate: match?.tickRate, totalFrames: match?.totalFrames, roundCount: match?.rounds?.length ?? 0, playerCount: match?.players?.filter((player) => !player.isBot).length ?? 0, mirage: match?.mapName === "de_mirage" ? { radarCalibration: "official overview calibration enabled", navMesh: "official de_mirage.nav parsed: 2544 walkable areas with 3D polygons", namedCallouts: "Chinese tactical callouts strictly follow the supplied reference overview; unmarked areas remain unnamed" } : undefined, coordinateSystem: "Demo world coordinates; a Mirage deep-v8 sample may also include calibrated radar coordinates and an official NAV area ID with vertical range." };
     } else {
       return NextResponse.json({ error: "AI 请求了未允许的工具。" }, { status: 422 });
     }
@@ -341,6 +346,8 @@ export async function POST(request: Request) {
       headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model, store: false, stream: false, reasoning: { effort: "medium" }, input: [
         { role: "system", content: threeDimensionalMapEnabled ? "3D map analysis is enabled for this request; stay within the returned evidence." : "STRICT 2D MAP MODE: 3D map access is disabled. Do not infer or claim aim rays, wall occlusion, visibility, peek geometry, world X/Y geometry, yaw, or pitch. Use only radar X/Y, Z height layer, NAV/callout, and match events." },
+        { role: "system", content: "When the tool evidence supports a location-specific conclusion, cite one to three concrete frames using exactly [[RADAR_FRAME: 12345]]. The client renders deterministic 2D radar evidence cards from these tokens. Never invent a frame." },
+        { role: "system", content: "User-facing communication rule: never use Demo frame numbers in prose. When roundTiming is available, convert evidence to elapsed round time (M:SS.s). [[RADAR_FRAME: ...]] is an internal hidden UI token only." },
         { role: "system", content: "你是 CS2 赛后复盘教练。依据比赛证据和工具返回结果回答。不要猜测；结论必须指出回合、玩家、帧或事件。若工具结果表明无法唯一定位玩家，先请求用户明确玩家。用简洁中文。" },
         { role: "system", content: "当工具返回准星/视角数据时，只能评价视角朝向、速度与交火时机；没有地图碰撞体、雷达标定和敌人骨骼射线检测时，不得断言准星精确落在敌人头部、墙角或具体点位。" },
         { role: "system", content: `比赛证据：${evidence}` },

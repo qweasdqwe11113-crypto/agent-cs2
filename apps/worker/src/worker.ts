@@ -8,7 +8,6 @@ import { analyzePlayerRound, parseDemo } from "./parser-client.js";
 import { analyzeShotVisibility } from "./map-collision.js";
 import { loadMirageRadarCalibration, worldToRadar } from "./map-calibration.js";
 import { getMirageNavArea } from "./map-navmesh.js";
-import { getMirageOfficialPlace } from "./map-official-places.js";
 import { getMirageReferenceCallout } from "./map-callouts.js";
 
 export function createDemoAnalysisWorker() {
@@ -88,12 +87,10 @@ export function createPlayerRoundAnalysisWorker() {
       analysis.samples = await Promise.all(analysis.samples.map(async (sample) => {
         const radar = worldToRadar(calibration, sample);
         const navArea = await getMirageNavArea(sample);
-        // Curated overview regions are the display label; official NAV is kept
-        // alongside it for vertical-floor disambiguation and evidence.
-        const callout = radar ? getMirageReferenceCallout(radar) : undefined;
-        const officialCallout = await getMirageOfficialPlace(navArea?.id);
-        const displayCallout = callout ?? officialCallout;
-        return { ...sample, ...(radar ? { radar } : {}), ...(displayCallout ? { callout: displayCallout } : {}), ...(navArea ? { navArea } : {}) };
+        // Point names strictly follow the supplied Chinese overview. NAV data
+        // stays internal for Z-layer disambiguation but never supplies labels.
+        const callout = radar ? getMirageReferenceCallout(sample, radar) : undefined;
+        return { ...sample, ...(radar ? { radar } : {}), ...(callout ? { callout } : {}), ...(navArea ? { navArea } : {}) };
       }));
     }
     await job.updateProgress(75);
