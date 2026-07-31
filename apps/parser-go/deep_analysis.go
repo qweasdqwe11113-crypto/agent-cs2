@@ -12,16 +12,17 @@ import (
 )
 
 type playerRoundAnalysis struct {
-	SchemaVersion      string           `json:"schemaVersion"`
-	RoundNumber        int              `json:"roundNumber"`
-	SteamID64          string           `json:"steamId64"`
-	FreezeTimeEndFrame int              `json:"freezeTimeEndFrame,omitempty"`
-	RoundTimeSeconds   float64          `json:"roundTimeSeconds,omitempty"`
-	InitialState       *initialState    `json:"initialState"`
-	Samples            []stateSample    `json:"samples"`
-	OpponentSamples    []opponentSample `json:"opponentSamples"`
-	Events             []deepEvent      `json:"events"`
-	Summary            deepSummary      `json:"summary"`
+	SchemaVersion      string              `json:"schemaVersion"`
+	RoundNumber        int                 `json:"roundNumber"`
+	SteamID64          string              `json:"steamId64"`
+	FreezeTimeEndFrame int                 `json:"freezeTimeEndFrame,omitempty"`
+	RoundTimeSeconds   float64             `json:"roundTimeSeconds,omitempty"`
+	InitialState       *initialState       `json:"initialState"`
+	Samples            []stateSample       `json:"samples"`
+	OpponentSamples    []opponentSample    `json:"opponentSamples"`
+	OtherPlayerSamples []otherPlayerSample `json:"otherPlayerSamples"`
+	Events             []deepEvent         `json:"events"`
+	Summary            deepSummary         `json:"summary"`
 }
 
 type initialState struct {
@@ -58,6 +59,20 @@ type opponentSample struct {
 	Health    int     `json:"health"`
 }
 
+// otherPlayerSample is used only by the manually selected radar timestamp.
+// It intentionally keeps position and team data only; the player's own
+// trajectory remains the primary deep-analysis view.
+type otherPlayerSample struct {
+	Frame     int     `json:"frame"`
+	SteamID64 string  `json:"steamId64"`
+	Name      string  `json:"name"`
+	Team      string  `json:"team"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Z         float64 `json:"z"`
+	Health    int     `json:"health"`
+}
+
 type deepEvent struct {
 	Frame      int     `json:"frame"`
 	Type       string  `json:"type"`
@@ -84,7 +99,7 @@ func analyzePlayerRound(demoPath string, wantedRound int, steamID string) (resul
 	defer file.Close()
 	parser := demoinfocs.NewParser(file)
 	defer parser.Close()
-	result = playerRoundAnalysis{SchemaVersion: "v2", RoundNumber: wantedRound, SteamID64: steamID, Samples: []stateSample{}, OpponentSamples: []opponentSample{}, Events: []deepEvent{}}
+	result = playerRoundAnalysis{SchemaVersion: "v3", RoundNumber: wantedRound, SteamID64: steamID, Samples: []stateSample{}, OpponentSamples: []opponentSample{}, OtherPlayerSamples: []otherPlayerSample{}, Events: []deepEvent{}}
 	round := 0
 	active := false
 	var previous *stateSample
@@ -131,6 +146,13 @@ func analyzePlayerRound(demoPath string, wantedRound int, steamID string) (resul
 		}
 		result.Samples = append(result.Samples, sample)
 		previous = &result.Samples[len(result.Samples)-1]
+		for _, other := range parser.GameState().Participants().All() {
+			if other == nil || isTarget(other, steamID) || !other.IsAlive() || other.IsUnknown {
+				continue
+			}
+			otherPosition := other.Position()
+			result.OtherPlayerSamples = append(result.OtherPlayerSamples, otherPlayerSample{Frame: parser.CurrentFrame(), SteamID64: fmt.Sprint(other.SteamID64), Name: other.Name, Team: teamName(other.Team), X: otherPosition.X, Y: otherPosition.Y, Z: otherPosition.Z, Health: other.Health()})
+		}
 		for _, opponent := range parser.GameState().Participants().All() {
 			if opponent == nil || opponent.Team == player.Team || !opponent.IsAlive() || opponent.IsUnknown {
 				continue

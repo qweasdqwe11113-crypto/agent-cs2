@@ -92,6 +92,10 @@ export function createPlayerRoundAnalysisWorker() {
         const callout = radar ? getMirageReferenceCallout(sample, radar) : undefined;
         return { ...sample, ...(radar ? { radar } : {}), ...(callout ? { callout } : {}), ...(navArea ? { navArea } : {}) };
       }));
+      analysis.otherPlayerSamples = (analysis.otherPlayerSamples ?? []).map((sample) => {
+        const radar = worldToRadar(calibration, sample);
+        return { ...sample, ...(radar ? { radar } : {}) };
+      });
     }
     await job.updateProgress(75);
     const visibilityChecks = await analyzeShotVisibility(job.data.mapName, analysis.samples, analysis.opponentSamples ?? [], analysis.events.filter((event) => event.type === "shot").map((event) => event.frame));

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const steamId64 = body.steamId64 as string;
   // Keep manual deep-analysis requests in sync with the parser schema. A new
   // key prevents old cached jobs (without round-clock metadata) being reused.
-  const jobId = `deep-v11-${body.baseAnalysisJobId}-${roundNumber}-${steamId64}`;
+  const jobId = `deep-v12-${body.baseAnalysisJobId}-${roundNumber}-${steamId64}`;
   if (!mapName) return NextResponse.json({ error: "地图信息不可用。" }, { status: 409 });
   const job = await playerRoundAnalysisQueue.add("analyze-player-round", { baseAnalysisJobId: body.baseAnalysisJobId, demoPath, mapName, roundNumber, steamId64 }, { jobId });
   return NextResponse.json({ jobId: job.id }, { status: 202 });

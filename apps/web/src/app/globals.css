@@ -297,6 +297,9 @@ summary { cursor: pointer; }
 .radar-evidence-path { fill: none; stroke: #f4bf75; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; opacity: .92; vector-effect: non-scaling-stroke; }
 .radar-evidence-position { fill: #a371f7; stroke: #fff; stroke-width: 4; }
 .radar-evidence-heading-arrow { stroke: #fff; stroke-width: 5; stroke-linecap: round; marker-end: none; }
+.radar-other-player { stroke: #0d1117; stroke-width: 3; }
+.radar-other-player-t { fill: #ff7b72; }
+.radar-other-player-ct { fill: #79c0ff; }
 .radar-evidence-meta { display: flex; flex-wrap: wrap; gap: .4rem .65rem; margin-top: .65rem; color: #aab6c4; font-size: .77rem; }
 .radar-evidence-meta span { padding: .18rem .35rem; border-radius: .25rem; background: #161b22; }
 
